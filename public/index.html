@@ -3,222 +3,1118 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Task Viewer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Claude Tasks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            claude: {
-              orange: '#E86F33',
-              cream: '#F5F0E8'
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style id="theme-styles">
-    /* Light mode overrides */
-    body.light { background: #f8fafc !important; color: #1e293b !important; }
-    .light .bg-gray-900 { background: #ffffff !important; }
-    .light .bg-gray-950 { background: #f8fafc !important; }
-    .light .bg-gray-900\/50 { background: rgba(255,255,255,0.9) !important; }
-    .light .bg-gray-800 { background: #f1f5f9 !important; }
-    .light .bg-gray-800\/50 { background: rgba(241,245,249,0.7) !important; }
-    .light .bg-gray-700 { background: #e2e8f0 !important; }
-    .light .bg-gray-700\/50 { background: rgba(226,232,240,0.5) !important; }
-    .light .border-gray-800 { border-color: #e2e8f0 !important; }
-    .light .border-gray-700 { border-color: #cbd5e1 !important; }
-    .light .text-gray-100 { color: #1e293b !important; }
-    .light .text-gray-200 { color: #334155 !important; }
-    .light .text-gray-300 { color: #475569 !important; }
-    .light .text-gray-400 { color: #64748b !important; }
-    .light .text-gray-500 { color: #64748b !important; }
-    .light .text-gray-600 { color: #94a3b8 !important; }
-    .light .hover\:text-gray-300:hover { color: #334155 !important; }
-    .light .hover\:text-gray-400:hover { color: #475569 !important; }
-    .light .hover\:bg-gray-800:hover { background: #f1f5f9 !important; }
-    .light .hover\:bg-gray-800\/50:hover { background: rgba(241,245,249,0.5) !important; }
-    .light .border-green-500\/30 { border-color: rgba(34,197,94,0.4) !important; }
-    .light .bg-green-500\/10 { background: rgba(34,197,94,0.15) !important; }
-    .light .bg-green-500\/20 { background: rgba(34,197,94,0.2) !important; }
-    .light .border-claude-orange\/30 { border-color: rgba(232,111,51,0.4) !important; }
-    .light .bg-claude-orange\/10 { background: rgba(232,111,51,0.12) !important; }
-    .light .bg-claude-orange\/20 { background: rgba(232,111,51,0.2) !important; }
-    .light .border-yellow-500\/20 { border-color: rgba(234,179,8,0.4) !important; }
-    .light .bg-yellow-500\/10 { background: rgba(234,179,8,0.15) !important; }
-    .light .bg-yellow-500\/20 { background: rgba(234,179,8,0.25) !important; }
-    .light .border-blue-500\/20 { border-color: rgba(59,130,246,0.4) !important; }
-    .light .bg-blue-500\/10 { background: rgba(59,130,246,0.15) !important; }
-    .light .prose pre { background: #f1f5f9 !important; }
-    .light .prose code { background: #e2e8f0 !important; }
-    .light ::-webkit-scrollbar-thumb { background: #e2e8f0 !important; }
-    .light ::-webkit-scrollbar-thumb:hover { background: #cbd5e1 !important; }
-    body.light { scrollbar-color: #e2e8f0 transparent; }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <style>
-    .prose pre { background: #1f2937; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
-    .prose code { background: #374151; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; }
-    .prose pre code { background: transparent; padding: 0; }
-    .status-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .kanban-column { min-height: calc(100vh - 200px); }
+    :root {
+      --bg-deep: #08090a;
+      --bg-surface: #0d0e10;
+      --bg-elevated: #131416;
+      --bg-hover: #1a1b1e;
+      --border: #1e2023;
+      --text-primary: #e8e8e8;
+      --text-secondary: #8b8d91;
+      --text-tertiary: #5a5c60;
+      --text-muted: #3d3f42;
+      --accent: #E86F33;
+      --accent-dim: rgba(232, 111, 51, 0.15);
+      --accent-glow: rgba(232, 111, 51, 0.4);
+      --success: #3ecf8e;
+      --success-dim: rgba(62, 207, 142, 0.12);
+      --warning: #f0b429;
+      --warning-dim: rgba(240, 180, 41, 0.12);
+      --mono: 'IBM Plex Mono', monospace;
+      --serif: 'Playfair Display', serif;
+    }
 
-    /* Custom scrollbar - dark mode default */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--mono);
+      font-size: 13px;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle scan-line texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #374151); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover, #4b5563); }
-    * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, #374151) transparent; }
-    :root { --scrollbar-thumb: #374151; --scrollbar-thumb-hover: #4b5563; }
-    body.light { --scrollbar-thumb: #d1d5db; --scrollbar-thumb-hover: #9ca3af; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* Layout */
+    .app { display: flex; height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-mark {
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-mark svg {
+      width: 14px;
+      height: 14px;
+      color: white;
+    }
+
+    .logo-text {
+      font-family: var(--serif);
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .connection-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--warning);
+    }
+
+    .connection-dot.live {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .connection-dot.error {
+      background: #ef4444;
+    }
+
+    /* Nav item */
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .nav-item svg {
+      width: 16px;
+      height: 16px;
+      opacity: 0.6;
+    }
+
+    /* Sidebar sections */
+    .sidebar-section {
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section.flex-1 {
+      flex: 1;
+      border-bottom: none;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    .filter-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 400;
+      color: var(--text-tertiary);
+      cursor: pointer;
+    }
+
+    .filter-toggle input[type="checkbox"] {
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--text-muted);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .filter-toggle input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Live Updates */
+    .live-updates {
+      padding: 0 12px 12px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .live-empty {
+      padding: 16px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .live-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .live-item:hover {
+      border-color: var(--text-muted);
+    }
+
+    .live-item .pulse {
+      width: 8px;
+      height: 8px;
+      margin-top: 4px;
+      background: var(--accent);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse 2s ease-in-out infinite;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .live-item-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .live-item-action {
+      font-size: 12px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .live-item-session {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Sessions */
+    .sessions-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px 12px;
+    }
+
+    .sessions-list .nav-item {
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      border-radius: 0;
+    }
+
+    .sessions-list .nav-item:hover {
+      background: transparent;
+    }
+
+    .session-item {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 4px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .session-item:hover {
+      background: var(--bg-hover);
+      border-color: var(--border);
+    }
+
+    .session-item.active {
+      background: var(--bg-elevated);
+      border-color: var(--border);
+    }
+
+    .session-name {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .session-name span {
+      font-size: 13px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-name .pulse {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.9); }
+    }
+
+    .session-project {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .session-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Footer */
+    .sidebar-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .sidebar-footer a {
+      color: var(--text-tertiary);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .sidebar-footer a:hover {
+      color: var(--text-secondary);
+    }
+
+    /* Main */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-deep);
+    }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      opacity: 0.3;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+    }
+
+    /* Session view */
+    .session-view {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .session-view.visible {
+      display: flex;
+    }
+
+    /* Header */
+    .view-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .view-title {
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+
+    .view-meta {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+
+    .view-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .view-progress {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .view-progress .progress-bar {
+      width: 120px;
+      height: 3px;
+    }
+
+    .view-progress .progress-text {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Kanban */
+    .kanban {
+      flex: 1;
+      display: flex;
+      gap: 24px;
+      padding: 24px;
+      overflow-x: auto;
+    }
+
+    .kanban-column {
+      width: 320px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .column-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .column-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .column-dot.pending { background: var(--text-muted); }
+    .column-dot.in-progress {
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .column-dot.completed { background: var(--success); }
+
+    .column-title {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .column-title.pending { color: var(--text-tertiary); }
+    .column-title.in-progress { color: var(--accent); }
+    .column-title.completed { color: var(--success); }
+
+    .column-count {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .column-count.pending {
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+    }
+
+    .column-count.in-progress {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .column-count.completed {
+      background: var(--success-dim);
+      color: var(--success);
+    }
+
+    .column-tasks {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .column-empty {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* Task card */
+    .task-card {
+      padding: 14px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .task-card:hover {
+      background: var(--bg-elevated);
+      border-color: var(--text-muted);
+      transform: translateY(-1px);
+    }
+
+    .task-card.in-progress {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-dim), inset 0 0 20px var(--accent-dim);
+    }
+
+    .task-card.completed {
+      opacity: 0.6;
+    }
+
+    .task-card.blocked {
+      opacity: 0.5;
+    }
+
+    .task-id {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-badge {
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .task-badge.blocked {
+      background: var(--warning-dim);
+      color: var(--warning);
+    }
+
+    .task-title {
+      font-size: 13px;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .task-card.completed .task-title {
+      text-decoration: line-through;
+      color: var(--text-tertiary);
+    }
+
+    .task-session {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 6px;
+      opacity: 0.8;
+    }
+
+    .task-active {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .task-active::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .task-blocked {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .task-desc {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 8px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Detail panel */
+    .detail-panel {
+      width: 400px;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border);
+      display: none;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .detail-panel.visible {
+      display: flex;
+    }
+
+    .detail-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .detail-header h3 {
+      font-family: var(--serif);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .detail-close {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .detail-close:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .detail-close svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .detail-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .detail-section {
+      margin-bottom: 20px;
+    }
+
+    .detail-label {
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .detail-title {
+      font-family: var(--serif);
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    .detail-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+
+    .detail-status.pending {
+      background: var(--bg-elevated);
+      color: var(--text-tertiary);
+    }
+
+    .detail-status.in_progress {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .detail-status.completed {
+      background: var(--success-dim);
+      color: var(--success);
+    }
+
+    .detail-status .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .detail-status.in_progress .dot {
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .detail-box {
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .detail-box.active {
+      background: var(--accent-dim);
+      border: 1px solid rgba(232, 111, 51, 0.2);
+      color: var(--accent);
+    }
+
+    .detail-box.blocked {
+      background: var(--warning-dim);
+      border: 1px solid rgba(240, 180, 41, 0.2);
+      color: var(--warning);
+    }
+
+    .detail-box.blocks {
+      background: rgba(96, 165, 250, 0.1);
+      border: 1px solid rgba(96, 165, 250, 0.2);
+      color: #60a5fa;
+    }
+
+    .detail-desc {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+    }
+
+    .detail-desc pre {
+      background: var(--bg-elevated);
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-size: 12px;
+    }
+
+    .detail-desc code {
+      background: var(--bg-elevated);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+
+    .detail-desc pre code {
+      background: transparent;
+      padding: 0;
+    }
+
+    .detail-desc hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 16px 0;
+    }
+
+    .detail-desc h4 {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      margin: 0 0 8px 0;
+    }
+
+    .detail-desc p {
+      margin: 0 0 12px 0;
+    }
+
+    .detail-desc p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Note form */
+    .note-section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .note-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .note-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .note-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .note-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .note-submit {
+      align-self: flex-end;
+      padding: 8px 16px;
+      background: var(--accent);
+      border: none;
+      border-radius: 5px;
+      color: white;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .note-submit:hover {
+      filter: brightness(1.1);
+    }
+
+    /* Light mode */
+    body.light {
+      --bg-deep: #fafafa;
+      --bg-surface: #ffffff;
+      --bg-elevated: #f5f5f5;
+      --bg-hover: #efefef;
+      --border: #e5e5e5;
+      --text-primary: #171717;
+      --text-secondary: #525252;
+      --text-tertiary: #737373;
+      --text-muted: #a3a3a3;
+      --accent-dim: rgba(232, 111, 51, 0.1);
+      --accent-glow: rgba(232, 111, 51, 0.3);
+      --success-dim: rgba(62, 207, 142, 0.1);
+      --warning-dim: rgba(240, 180, 41, 0.1);
+    }
+
+    body.light::before {
+      display: none;
+    }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
-  <div class="flex h-screen">
+<body>
+  <div class="app">
     <!-- Sidebar -->
-    <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0">
-      <header class="p-4 border-b border-gray-800">
-        <h1 class="text-lg font-semibold flex items-center gap-2">
-          <svg class="w-6 h-6 text-claude-orange" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-          </svg>
-          Claude Tasks
-        </h1>
-        <p class="text-xs text-gray-500 mt-1">~/.claude/tasks</p>
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="logo">
+          <div class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <span class="logo-text">Claude Tasks</span>
+        </div>
+        <div id="connection-status" class="connection">
+          <span class="connection-dot"></span>
+          <span>Connecting</span>
+        </div>
       </header>
 
-      <div class="p-3 border-b border-gray-800">
-        <div id="connection-status" class="flex items-center gap-2 text-xs">
-          <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-          <span class="text-gray-400">Connecting...</span>
+      <!-- Live Updates -->
+      <div class="sidebar-section">
+        <div class="section-header">
+          <span>Live Updates</span>
+        </div>
+        <div id="live-updates" class="live-updates">
+          <div class="live-empty">No active tasks</div>
         </div>
       </div>
 
-      <!-- All Tasks button -->
-      <div class="p-2 border-b border-gray-800">
-        <button
-          id="all-tasks-btn"
-          onclick="showAllTasks()"
-          class="w-full text-left p-3 rounded-lg transition-colors hover:bg-gray-800/50 flex items-center gap-2"
-        >
-          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-          </svg>
-          <span class="text-sm text-gray-300">All Tasks</span>
-        </button>
-        <label class="flex items-center gap-2 px-3 py-2 mt-1 text-xs text-gray-500 cursor-pointer hover:text-gray-400">
-          <input type="checkbox" id="hide-inactive" onchange="toggleHideInactive()" class="rounded border-gray-600 bg-gray-800 text-claude-orange focus:ring-claude-orange focus:ring-offset-0">
-          <span>Show active only</span>
-        </label>
+      <!-- Sessions -->
+      <div class="sidebar-section flex-1">
+        <div class="section-header">
+          <span>Sessions</span>
+          <label class="filter-toggle">
+            <input type="checkbox" id="hide-inactive" onchange="toggleHideInactive()">
+            <span>Active only</span>
+          </label>
+        </div>
+        <div id="sessions-list" class="sessions-list">
+          <button id="all-tasks-btn" class="nav-item" onclick="showAllTasks()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+            <span>All Tasks</span>
+          </button>
+        </div>
       </div>
 
-      <nav id="sessions-list" class="flex-1 overflow-y-auto p-2">
-        <p class="text-gray-500 text-sm p-2">Loading sessions...</p>
-      </nav>
-
-      <footer class="p-3 border-t border-gray-800 text-xs text-gray-600">
-        <a href="https://github.com/L1AD/claude-task-viewer" target="_blank" class="hover:text-gray-400">GitHub</a>
-        <span class="mx-2">·</span>
-        <a href="https://policylayer.com" target="_blank" class="hover:text-gray-400">PolicyLayer</a>
-        <span class="mx-2">·</span>
-        <span>v1.2.0</span>
+      <footer class="sidebar-footer">
+        <a href="https://github.com/L1AD/claude-task-viewer" target="_blank">GitHub</a>
+        <span style="margin: 0 6px;">·</span>
+        <a href="https://policylayer.com" target="_blank">PolicyLayer</a>
       </footer>
     </aside>
 
-    <!-- Main content -->
-    <main class="flex-1 flex flex-col overflow-hidden">
-      <div id="no-session" class="flex-1 flex items-center justify-center text-gray-600">
-        <div class="text-center">
-          <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-          </svg>
-          <p>Select a session to view tasks</p>
-        </div>
+    <!-- Main -->
+    <main class="main">
+      <div id="no-session" class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <p>Select a session to view tasks</p>
       </div>
 
-      <div id="session-view" class="flex-1 flex flex-col overflow-hidden hidden">
-        <!-- Session header -->
-        <header class="p-4 border-b border-gray-800 bg-gray-900/50 flex-shrink-0">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 id="session-title" class="text-sm font-mono text-gray-400">Session</h2>
-              <p id="session-meta" class="text-xs text-gray-500 mt-0.5"></p>
-            </div>
-            <div class="flex items-center gap-4">
-              <div class="flex items-center gap-2">
-                <div class="w-32 h-2 bg-gray-800 rounded-full overflow-hidden">
-                  <div id="progress-bar" class="h-full bg-gradient-to-r from-claude-orange to-orange-400 transition-all duration-500" style="width: 0%"></div>
-                </div>
-                <span id="progress-percent" class="text-sm font-medium text-claude-orange">0%</span>
+      <div id="session-view" class="session-view">
+        <header class="view-header">
+          <div>
+            <h1 id="session-title" class="view-title">Session</h1>
+            <p id="session-meta" class="view-meta"></p>
+          </div>
+          <div class="view-actions">
+            <div class="view-progress">
+              <div class="progress-bar">
+                <div id="progress-bar" class="progress-fill" style="width: 0%"></div>
               </div>
-              <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors" title="Toggle theme">
-                <svg id="theme-icon-dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-                </svg>
-                <svg id="theme-icon-light" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-                </svg>
-              </button>
+              <span id="progress-percent" class="progress-text">0%</span>
             </div>
+            <button id="theme-toggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme">
+              <svg id="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+              </svg>
+              <svg id="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                <circle cx="12" cy="12" r="5"/>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </svg>
+            </button>
           </div>
         </header>
 
-        <!-- Kanban board -->
-        <div class="flex-1 overflow-x-auto p-4">
-          <div class="flex gap-8 h-full min-w-max">
-            <!-- Pending column -->
-            <div class="w-80 flex flex-col">
-              <div class="flex items-center gap-2 mb-3 px-1">
-                <span class="w-3 h-3 rounded-full bg-gray-500"></span>
-                <h3 class="font-medium text-gray-400">Pending</h3>
-                <span id="pending-count" class="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">0</span>
-              </div>
-              <div id="pending-tasks" class="flex-1 space-y-3 kanban-column overflow-y-auto pr-1">
-              </div>
+        <div class="kanban">
+          <div class="kanban-column">
+            <div class="column-header">
+              <span class="column-dot pending"></span>
+              <span class="column-title pending">Pending</span>
+              <span id="pending-count" class="column-count pending">0</span>
             </div>
+            <div id="pending-tasks" class="column-tasks"></div>
+          </div>
 
-            <!-- In Progress column -->
-            <div class="w-80 flex flex-col">
-              <div class="flex items-center gap-2 mb-3 px-1">
-                <span class="w-3 h-3 rounded-full bg-claude-orange status-pulse"></span>
-                <h3 class="font-medium text-claude-orange">In Progress</h3>
-                <span id="in-progress-count" class="text-xs text-claude-orange/70 bg-claude-orange/20 px-2 py-0.5 rounded-full">0</span>
-              </div>
-              <div id="in-progress-tasks" class="flex-1 space-y-3 kanban-column overflow-y-auto pr-1">
-              </div>
+          <div class="kanban-column">
+            <div class="column-header">
+              <span class="column-dot in-progress"></span>
+              <span class="column-title in-progress">In Progress</span>
+              <span id="in-progress-count" class="column-count in-progress">0</span>
             </div>
+            <div id="in-progress-tasks" class="column-tasks"></div>
+          </div>
 
-            <!-- Completed column -->
-            <div class="w-80 flex flex-col">
-              <div class="flex items-center gap-2 mb-3 px-1">
-                <span class="w-3 h-3 rounded-full bg-green-500"></span>
-                <h3 class="font-medium text-green-400">Completed</h3>
-                <span id="completed-count" class="text-xs text-green-400/70 bg-green-500/20 px-2 py-0.5 rounded-full">0</span>
-              </div>
-              <div id="completed-tasks" class="flex-1 space-y-3 kanban-column overflow-y-auto pr-1">
-              </div>
+          <div class="kanban-column">
+            <div class="column-header">
+              <span class="column-dot completed"></span>
+              <span class="column-title completed">Completed</span>
+              <span id="completed-count" class="column-count completed">0</span>
             </div>
+            <div id="completed-tasks" class="column-tasks"></div>
           </div>
         </div>
       </div>
     </main>
 
-    <!-- Task detail panel -->
-    <aside id="detail-panel" class="w-96 bg-gray-900 border-l border-gray-800 hidden overflow-y-auto flex-shrink-0">
-      <header class="p-4 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900 z-10">
-        <h3 class="font-semibold">Task Details</h3>
-        <button id="close-detail" class="text-gray-500 hover:text-gray-300">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+    <!-- Detail panel -->
+    <aside id="detail-panel" class="detail-panel">
+      <header class="detail-header">
+        <h3>Task Details</h3>
+        <button id="close-detail" class="detail-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </header>
-      <div id="detail-content" class="p-4"></div>
+      <div id="detail-content" class="detail-content"></div>
     </aside>
   </div>
 
@@ -227,10 +1123,10 @@
     let sessions = [];
     let currentSessionId = null;
     let currentTasks = [];
-    let viewMode = 'session'; // 'session' or 'all'
+    let viewMode = 'session';
     let hideInactive = localStorage.getItem('hideInactive') === 'true';
 
-    // DOM elements
+    // DOM
     const sessionsList = document.getElementById('sessions-list');
     const noSession = document.getElementById('no-session');
     const sessionView = document.getElementById('session-view');
@@ -248,18 +1144,52 @@
     const detailContent = document.getElementById('detail-content');
     const connectionStatus = document.getElementById('connection-status');
 
-    // Fetch sessions
     async function fetchSessions() {
       try {
         const res = await fetch('/api/sessions');
         sessions = await res.json();
         renderSessions();
+        fetchLiveUpdates();
       } catch (error) {
         console.error('Failed to fetch sessions:', error);
       }
     }
 
-    // Fetch tasks for a session
+    async function fetchLiveUpdates() {
+      try {
+        const res = await fetch('/api/tasks/all');
+        const allTasks = await res.json();
+        const activeTasks = allTasks.filter(t => t.status === 'in_progress');
+        renderLiveUpdates(activeTasks);
+      } catch (error) {
+        console.error('Failed to fetch live updates:', error);
+      }
+    }
+
+    function renderLiveUpdates(activeTasks) {
+      const container = document.getElementById('live-updates');
+
+      if (activeTasks.length === 0) {
+        container.innerHTML = '<div class="live-empty">No active tasks</div>';
+        return;
+      }
+
+      container.innerHTML = activeTasks.map(task => `
+        <div class="live-item" onclick="openLiveTask('${task.sessionId}', '${task.id}')">
+          <span class="pulse"></span>
+          <div class="live-item-content">
+            <div class="live-item-action">${escapeHtml(task.activeForm || task.subject)}</div>
+            <div class="live-item-session">${escapeHtml(task.sessionName || task.sessionId.slice(0, 8))}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function openLiveTask(sessionId, taskId) {
+      await fetchTasks(sessionId);
+      showTaskDetail(taskId, sessionId);
+    }
+
     async function fetchTasks(sessionId) {
       try {
         viewMode = 'session';
@@ -272,7 +1202,6 @@
       }
     }
 
-    // Show all tasks across all sessions
     async function showAllTasks() {
       try {
         viewMode = 'all';
@@ -286,10 +1215,9 @@
       }
     }
 
-    // Render all tasks view
     function renderAllTasks() {
-      noSession.classList.add('hidden');
-      sessionView.classList.remove('hidden');
+      noSession.style.display = 'none';
+      sessionView.classList.add('visible');
 
       const totalTasks = currentTasks.length;
       const completed = currentTasks.filter(t => t.status === 'completed').length;
@@ -297,39 +1225,39 @@
 
       sessionTitle.textContent = 'All Tasks';
       sessionMeta.textContent = `${totalTasks} tasks across ${sessions.length} sessions`;
-
       progressPercent.textContent = `${percent}%`;
       progressBar.style.width = `${percent}%`;
 
       renderKanban();
     }
 
-    // Render sessions sidebar
     function renderSessions() {
-      // Update all tasks button state
       const allTasksBtn = document.getElementById('all-tasks-btn');
-      if (allTasksBtn) {
-        allTasksBtn.className = `w-full text-left p-3 rounded-lg transition-colors flex items-center gap-2 ${
-          viewMode === 'all' ? 'bg-gray-800' : 'hover:bg-gray-800/50'
-        }`;
-      }
+      allTasksBtn.classList.toggle('active', viewMode === 'all');
 
-      // Filter sessions based on hideInactive
       const filteredSessions = hideInactive
         ? sessions.filter(s => s.pending > 0 || s.inProgress > 0)
         : sessions;
 
+      // Get container for session items (after All Tasks button)
+      let sessionsContainer = document.getElementById('sessions-items');
+      if (!sessionsContainer) {
+        sessionsContainer = document.createElement('div');
+        sessionsContainer.id = 'sessions-items';
+        sessionsList.appendChild(sessionsContainer);
+      }
+
       if (filteredSessions.length === 0) {
-        sessionsList.innerHTML = `
-          <div class="text-gray-500 text-sm p-4 text-center">
+        sessionsContainer.innerHTML = `
+          <div style="padding: 24px 12px; text-align: center; color: var(--text-muted); font-size: 12px;">
             <p>${hideInactive ? 'No active sessions' : 'No sessions found'}</p>
-            <p class="mt-2 text-xs">${hideInactive ? 'Uncheck "Show active only" to see all' : 'Tasks will appear here when you use Claude Code'}</p>
+            <p style="margin-top: 8px; font-size: 11px;">${hideInactive ? 'Uncheck filter to see all' : 'Tasks appear when you use Claude Code'}</p>
           </div>
         `;
         return;
       }
 
-      sessionsList.innerHTML = filteredSessions.map(session => {
+      sessionsContainer.innerHTML = filteredSessions.map(session => {
         const total = session.taskCount;
         const percent = total > 0 ? Math.round((session.completed / total) * 100) : 0;
         const isActive = session.id === currentSessionId && viewMode === 'session';
@@ -338,31 +1266,25 @@
         const projectName = session.project ? session.project.split('/').pop() : null;
 
         return `
-          <button
-            onclick="fetchTasks('${session.id}')"
-            class="w-full text-left p-3 rounded-lg transition-colors ${isActive ? 'bg-gray-800' : 'hover:bg-gray-800/50'}"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm text-gray-200 truncate flex-1 ${session.name ? '' : 'font-mono text-xs text-gray-400'}">${escapeHtml(displayName)}</span>
-              ${hasInProgress ? '<span class="w-2 h-2 rounded-full bg-claude-orange status-pulse flex-shrink-0"></span>' : ''}
+          <button onclick="fetchTasks('${session.id}')" class="session-item ${isActive ? 'active' : ''}">
+            <div class="session-name">
+              <span>${escapeHtml(displayName)}</span>
+              ${hasInProgress ? '<span class="pulse"></span>' : ''}
             </div>
-            ${projectName ? `<p class="text-xs text-gray-500 mt-1 truncate">${escapeHtml(projectName)}</p>` : ''}
-            <div class="flex items-center gap-2 mt-2">
-              <div class="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                <div class="h-full bg-claude-orange transition-all" style="width: ${percent}%"></div>
-              </div>
-              <span class="text-xs text-gray-500">${session.completed}/${total}</span>
+            ${projectName ? `<div class="session-project">${escapeHtml(projectName)}</div>` : ''}
+            <div class="session-progress">
+              <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
+              <span class="progress-text">${session.completed}/${total}</span>
             </div>
-            <p class="text-xs text-gray-600 mt-1">Tasks updated ${formatDate(session.modifiedAt)}</p>
+            <div class="session-time">${formatDate(session.modifiedAt)}</div>
           </button>
         `;
       }).join('');
     }
 
-    // Render current session
     function renderSession() {
-      noSession.classList.add('hidden');
-      sessionView.classList.remove('hidden');
+      noSession.style.display = 'none';
+      sessionView.classList.add('visible');
 
       const session = sessions.find(s => s.id === currentSessionId);
       if (!session) return;
@@ -370,7 +1292,7 @@
       const displayName = session.name || currentSessionId;
       sessionTitle.textContent = displayName;
       const projectName = session.project ? session.project.split('/').pop() : null;
-      sessionMeta.textContent = `${currentTasks.length} tasks${projectName ? ' · ' + projectName : ''} · Tasks updated ${formatDate(session.modifiedAt)}`;
+      sessionMeta.textContent = `${currentTasks.length} tasks${projectName ? ' · ' + projectName : ''} · ${formatDate(session.modifiedAt)}`;
 
       const completed = currentTasks.filter(t => t.status === 'completed').length;
       const percent = currentTasks.length > 0 ? Math.round((completed / currentTasks.length) * 100) : 0;
@@ -382,41 +1304,27 @@
       renderSessions();
     }
 
-    // Render task card
     function renderTaskCard(task) {
       const isBlocked = task.blockedBy && task.blockedBy.length > 0;
-      const statusStyles = {
-        pending: 'border-gray-700 bg-gray-800/50',
-        in_progress: 'border-claude-orange/30 bg-claude-orange/10',
-        completed: 'border-green-500/30 bg-green-500/10'
-      };
       const taskId = viewMode === 'all' ? `${task.sessionId?.slice(0,4)}-${task.id}` : task.id;
       const sessionLabel = viewMode === 'all' && task.sessionName ? task.sessionName : null;
+      const statusClass = task.status.replace('_', '-');
 
       return `
-        <div
-          onclick="showTaskDetail('${task.id}', '${task.sessionId || ''}')"
-          class="p-3 rounded-lg border ${statusStyles[task.status] || statusStyles.pending} cursor-pointer hover:brightness-110 transition-all ${isBlocked ? 'opacity-60' : ''}"
-        >
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-xs font-mono text-gray-500">#${taskId}</span>
-            ${isBlocked ? '<span class="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">blocked</span>' : ''}
+        <div onclick="showTaskDetail('${task.id}', '${task.sessionId || ''}')" class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}">
+          <div class="task-id">
+            <span>#${taskId}</span>
+            ${isBlocked ? '<span class="task-badge blocked">Blocked</span>' : ''}
           </div>
-          <h4 class="text-sm font-medium ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-200'}">${escapeHtml(task.subject)}</h4>
-          ${sessionLabel ? `<p class="text-xs text-blue-400 mt-1">${escapeHtml(sessionLabel)}</p>` : ''}
-          ${task.status === 'in_progress' && task.activeForm ? `
-            <p class="text-xs text-claude-orange mt-2 flex items-center gap-1">
-              <span class="status-pulse">●</span>
-              ${escapeHtml(task.activeForm)}
-            </p>
-          ` : ''}
-          ${isBlocked ? `<p class="text-xs text-gray-500 mt-2">Waiting on: ${task.blockedBy.map(id => '#' + id).join(', ')}</p>` : ''}
-          ${task.description ? `<p class="text-xs text-gray-500 mt-2 line-clamp-2">${escapeHtml(task.description.split('\n')[0])}</p>` : ''}
+          <div class="task-title">${escapeHtml(task.subject)}</div>
+          ${sessionLabel ? `<div class="task-session">${escapeHtml(sessionLabel)}</div>` : ''}
+          ${task.status === 'in_progress' && task.activeForm ? `<div class="task-active">${escapeHtml(task.activeForm)}</div>` : ''}
+          ${isBlocked ? `<div class="task-blocked">Waiting on ${task.blockedBy.map(id => '#' + id).join(', ')}</div>` : ''}
+          ${task.description ? `<div class="task-desc">${escapeHtml(task.description.split('\n')[0])}</div>` : ''}
         </div>
       `;
     }
 
-    // Render kanban board
     function renderKanban() {
       const pending = currentTasks.filter(t => t.status === 'pending');
       const inProgress = currentTasks.filter(t => t.status === 'in_progress');
@@ -428,112 +1336,160 @@
 
       pendingTasks.innerHTML = pending.length > 0
         ? pending.map(renderTaskCard).join('')
-        : '<p class="text-gray-600 text-sm text-center py-8">No pending tasks</p>';
+        : '<div class="column-empty">No pending tasks</div>';
 
       inProgressTasks.innerHTML = inProgress.length > 0
         ? inProgress.map(renderTaskCard).join('')
-        : '<p class="text-gray-600 text-sm text-center py-8">No tasks in progress</p>';
+        : '<div class="column-empty">No active tasks</div>';
 
       completedTasks.innerHTML = completed.length > 0
         ? completed.map(renderTaskCard).join('')
-        : '<p class="text-gray-600 text-sm text-center py-8">No completed tasks</p>';
+        : '<div class="column-empty">No completed tasks</div>';
     }
 
-    // Show task detail
     function showTaskDetail(taskId, sessionId = null) {
-      const task = currentTasks.find(t =>
-        t.id === taskId && (!sessionId || t.sessionId === sessionId)
-      );
+      const task = currentTasks.find(t => t.id === taskId && (!sessionId || t.sessionId === sessionId));
       if (!task) return;
 
-      detailPanel.classList.remove('hidden');
+      detailPanel.classList.add('visible');
 
       const statusLabels = {
-        completed: '<span class="inline-flex items-center gap-1 text-green-400"><span class="w-2 h-2 rounded-full bg-green-500"></span>Completed</span>',
-        in_progress: '<span class="inline-flex items-center gap-1 text-claude-orange"><span class="w-2 h-2 rounded-full bg-claude-orange status-pulse"></span>In Progress</span>',
-        pending: '<span class="inline-flex items-center gap-1 text-gray-400"><span class="w-2 h-2 rounded-full bg-gray-500"></span>Pending</span>'
+        completed: '<span class="detail-status completed"><span class="dot"></span>Completed</span>',
+        in_progress: '<span class="detail-status in_progress"><span class="dot"></span>In Progress</span>',
+        pending: '<span class="detail-status pending"><span class="dot"></span>Pending</span>'
       };
 
       detailContent.innerHTML = `
-        <div class="space-y-4">
-          <div>
-            <span class="text-xs text-gray-500">Task #${task.id}</span>
-            <h3 class="text-lg font-semibold mt-1">${escapeHtml(task.subject)}</h3>
+        <div class="detail-section">
+          <div class="detail-label">Task #${task.id}</div>
+          <h2 class="detail-title">${escapeHtml(task.subject)}</h2>
+        </div>
+
+        <div class="detail-section">
+          ${statusLabels[task.status] || statusLabels.pending}
+        </div>
+
+        ${task.activeForm && task.status === 'in_progress' ? `
+          <div class="detail-section">
+            <div class="detail-box active">
+              <strong>Currently:</strong> ${escapeHtml(task.activeForm)}
+            </div>
           </div>
+        ` : ''}
 
-          <div class="text-sm">
-            ${statusLabels[task.status] || statusLabels.pending}
+        ${task.blockedBy && task.blockedBy.length > 0 ? `
+          <div class="detail-section">
+            <div class="detail-box blocked">
+              <strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}
+            </div>
           </div>
+        ` : ''}
 
-          ${task.activeForm && task.status === 'in_progress' ? `
-            <div class="text-sm bg-claude-orange/10 border border-claude-orange/20 rounded-lg p-3">
-              <span class="text-gray-400">Currently:</span>
-              <span class="text-claude-orange ml-1">${escapeHtml(task.activeForm)}</span>
+        ${task.blocks && task.blocks.length > 0 ? `
+          <div class="detail-section">
+            <div class="detail-box blocks">
+              <strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}
             </div>
-          ` : ''}
+          </div>
+        ` : ''}
 
-          ${task.blockedBy && task.blockedBy.length > 0 ? `
-            <div class="text-sm bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-              <span class="text-gray-400">Blocked by:</span>
-              <span class="text-yellow-400 ml-1">${task.blockedBy.map(id => '#' + id).join(', ')}</span>
-            </div>
-          ` : ''}
+        ${task.description ? `
+          <div class="detail-section">
+            <div class="detail-label">Description</div>
+            <div class="detail-desc">${DOMPurify.sanitize(marked.parse(task.description))}</div>
+          </div>
+        ` : ''}
 
-          ${task.blocks && task.blocks.length > 0 ? `
-            <div class="text-sm bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-              <span class="text-gray-400">Blocks:</span>
-              <span class="text-blue-400 ml-1">${task.blocks.map(id => '#' + id).join(', ')}</span>
-            </div>
-          ` : ''}
-
-          ${task.description ? `
-            <div class="border-t border-gray-800 pt-4 mt-4">
-              <h4 class="text-sm font-medium text-gray-400 mb-3">Description</h4>
-              <div class="prose prose-invert prose-sm max-w-none text-gray-300">
-                ${marked.parse(task.description)}
-              </div>
-            </div>
-          ` : ''}
+        <div class="detail-section note-section">
+          <div class="detail-label">Add Note</div>
+          <form class="note-form" onsubmit="addNote(event, '${task.id}', '${task.sessionId || currentSessionId}')">
+            <textarea id="note-input" class="note-input" placeholder="Add a note for Claude..." rows="3"></textarea>
+            <button type="submit" class="note-submit">Add Note</button>
+          </form>
         </div>
       `;
     }
 
-    // Close detail panel
-    document.getElementById('close-detail').onclick = () => {
-      detailPanel.classList.add('hidden');
-    };
+    async function addNote(event, taskId, sessionId) {
+      event.preventDefault();
+      const input = document.getElementById('note-input');
+      const note = input.value.trim();
+      if (!note) return;
 
-    // Setup SSE for live updates
-    function setupEventSource() {
-      const eventSource = new EventSource('/api/events');
+      try {
+        const res = await fetch(`/api/tasks/${sessionId}/${taskId}/note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note })
+        });
 
-      eventSource.onopen = () => {
-        connectionStatus.innerHTML = `
-          <span class="w-2 h-2 rounded-full bg-green-500"></span>
-          <span class="text-gray-400">Live</span>
-        `;
-      };
-
-      eventSource.onerror = () => {
-        connectionStatus.innerHTML = `
-          <span class="w-2 h-2 rounded-full bg-red-500"></span>
-          <span class="text-gray-400">Disconnected</span>
-        `;
-      };
-
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'update') {
-          fetchSessions();
-          if (data.sessionId === currentSessionId) {
-            fetchTasks(currentSessionId);
+        if (res.ok) {
+          input.value = '';
+          // Refresh to show updated description
+          if (viewMode === 'all') {
+            const tasksRes = await fetch('/api/tasks/all');
+            currentTasks = await tasksRes.json();
+          } else {
+            await fetchTasks(sessionId);
           }
+          showTaskDetail(taskId, sessionId);
         }
-      };
+      } catch (error) {
+        console.error('Failed to add note:', error);
+      }
     }
 
-    // Helpers
+    function closeDetailPanel() {
+      detailPanel.classList.remove('visible');
+    }
+
+    document.getElementById('close-detail').onclick = closeDetailPanel;
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && detailPanel.classList.contains('visible')) {
+        closeDetailPanel();
+      }
+    });
+
+    function setupEventSource() {
+      let retryDelay = 1000;
+      let eventSource;
+
+      function connect() {
+        eventSource = new EventSource('/api/events');
+
+        eventSource.onopen = () => {
+          retryDelay = 1000; // Reset on successful connection
+          connectionStatus.innerHTML = `
+            <span class="connection-dot live"></span>
+            <span>Connected</span>
+          `;
+        };
+
+        eventSource.onerror = () => {
+          eventSource.close();
+          connectionStatus.innerHTML = `
+            <span class="connection-dot error"></span>
+            <span>Reconnecting...</span>
+          `;
+          setTimeout(connect, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30000); // Max 30s
+        };
+
+        eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === 'update' || data.type === 'metadata-update') {
+            fetchSessions();
+            if (currentSessionId && data.sessionId === currentSessionId) {
+              fetchTasks(currentSessionId);
+            }
+          }
+        };
+      }
+
+      connect();
+    }
+
     function formatDate(dateStr) {
       const date = new Date(dateStr);
       const now = new Date();
@@ -551,56 +1507,37 @@
       return div.innerHTML;
     }
 
-    // Toggle hide inactive sessions
     function toggleHideInactive() {
       hideInactive = document.getElementById('hide-inactive').checked;
       localStorage.setItem('hideInactive', hideInactive);
       renderSessions();
     }
 
-    // Theme toggle
     function toggleTheme() {
-      const body = document.body;
-      const isLight = body.classList.contains('light');
-
-      if (isLight) {
-        body.classList.remove('light');
-        localStorage.setItem('theme', 'dark');
-        document.getElementById('theme-icon-dark').classList.remove('hidden');
-        document.getElementById('theme-icon-light').classList.add('hidden');
-      } else {
-        body.classList.add('light');
-        localStorage.setItem('theme', 'light');
-        document.getElementById('theme-icon-dark').classList.add('hidden');
-        document.getElementById('theme-icon-light').classList.remove('hidden');
-      }
+      const isLight = document.body.classList.toggle('light');
+      localStorage.setItem('theme', isLight ? 'light' : 'dark');
+      document.getElementById('theme-icon-dark').style.display = isLight ? 'none' : 'block';
+      document.getElementById('theme-icon-light').style.display = isLight ? 'block' : 'none';
     }
 
-    // Load saved theme
     function loadTheme() {
-      const saved = localStorage.getItem('theme');
-      if (saved === 'light') {
+      if (localStorage.getItem('theme') === 'light') {
         document.body.classList.add('light');
-        document.getElementById('theme-icon-dark').classList.add('hidden');
-        document.getElementById('theme-icon-light').classList.remove('hidden');
+        document.getElementById('theme-icon-dark').style.display = 'none';
+        document.getElementById('theme-icon-light').style.display = 'block';
       }
     }
 
-    // Load saved preferences
     function loadPreferences() {
       document.getElementById('hide-inactive').checked = hideInactive;
     }
 
-    // Initialize
+    // Init
     loadTheme();
     loadPreferences();
     fetchSessions();
     setupEventSource();
-
-    // Default to All Tasks view
-    setTimeout(() => {
-      showAllTasks();
-    }, 500);
+    setTimeout(showAllTasks, 500);
   </script>
 </body>
 </html>
