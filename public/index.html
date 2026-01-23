@@ -111,6 +111,10 @@
           </svg>
           <span class="text-sm text-gray-300">All Tasks</span>
         </button>
+        <label class="flex items-center gap-2 px-3 py-2 mt-1 text-xs text-gray-500 cursor-pointer hover:text-gray-400">
+          <input type="checkbox" id="hide-inactive" onchange="toggleHideInactive()" class="rounded border-gray-600 bg-gray-800 text-claude-orange focus:ring-claude-orange focus:ring-offset-0">
+          <span>Show active only</span>
+        </label>
       </div>
 
       <nav id="sessions-list" class="flex-1 overflow-y-auto p-2">
@@ -122,7 +126,7 @@
         <span class="mx-2">·</span>
         <a href="https://policylayer.com" target="_blank" class="hover:text-gray-400">PolicyLayer</a>
         <span class="mx-2">·</span>
-        <span>v1.0.0</span>
+        <span>v1.2.0</span>
       </footer>
     </aside>
 
@@ -224,6 +228,7 @@
     let currentSessionId = null;
     let currentTasks = [];
     let viewMode = 'session'; // 'session' or 'all'
+    let hideInactive = localStorage.getItem('hideInactive') === 'true';
 
     // DOM elements
     const sessionsList = document.getElementById('sessions-list');
@@ -309,17 +314,22 @@
         }`;
       }
 
-      if (sessions.length === 0) {
+      // Filter sessions based on hideInactive
+      const filteredSessions = hideInactive
+        ? sessions.filter(s => s.pending > 0 || s.inProgress > 0)
+        : sessions;
+
+      if (filteredSessions.length === 0) {
         sessionsList.innerHTML = `
           <div class="text-gray-500 text-sm p-4 text-center">
-            <p>No sessions found</p>
-            <p class="mt-2 text-xs">Tasks will appear here when you use Claude Code</p>
+            <p>${hideInactive ? 'No active sessions' : 'No sessions found'}</p>
+            <p class="mt-2 text-xs">${hideInactive ? 'Uncheck "Show active only" to see all' : 'Tasks will appear here when you use Claude Code'}</p>
           </div>
         `;
         return;
       }
 
-      sessionsList.innerHTML = sessions.map(session => {
+      sessionsList.innerHTML = filteredSessions.map(session => {
         const total = session.taskCount;
         const percent = total > 0 ? Math.round((session.completed / total) * 100) : 0;
         const isActive = session.id === currentSessionId && viewMode === 'session';
@@ -541,6 +551,13 @@
       return div.innerHTML;
     }
 
+    // Toggle hide inactive sessions
+    function toggleHideInactive() {
+      hideInactive = document.getElementById('hide-inactive').checked;
+      localStorage.setItem('hideInactive', hideInactive);
+      renderSessions();
+    }
+
     // Theme toggle
     function toggleTheme() {
       const body = document.body;
@@ -569,8 +586,14 @@
       }
     }
 
+    // Load saved preferences
+    function loadPreferences() {
+      document.getElementById('hide-inactive').checked = hideInactive;
+    }
+
     // Initialize
     loadTheme();
+    loadPreferences();
     fetchSessions();
     setupEventSource();
 
