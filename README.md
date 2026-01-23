@@ -2,9 +2,9 @@
 
 A real-time Kanban board for monitoring Claude Code tasks. See what Claude is working on, track dependencies between tasks, and add notes that Claude can read.
 
-![Dark mode](screenshot-dark.png)
+![Dark mode](screenshot-dark-v2.png)
 
-![Light mode](screenshot-light.png)
+![Light mode](screenshot-light-v2.png)
 
 ## Why Use This?
 
