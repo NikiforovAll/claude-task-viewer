@@ -1,20 +1,43 @@
 # Claude Task Viewer
 
-A web-based Kanban board for viewing Claude Code tasks. Watch your tasks update in real-time as Claude works.
+A real-time Kanban board for monitoring Claude Code tasks. See what Claude is working on, track dependencies between tasks, and add notes that Claude can read.
 
 ![Dark mode](screenshot-dark.png)
 
 ![Light mode](screenshot-light.png)
 
+## Why Use This?
+
+When Claude Code breaks down complex work into tasks, you get visibility into its thinking — but only in the terminal. Claude Task Viewer gives you a persistent, visual dashboard to:
+
+- **See the big picture** — All your sessions and tasks in one place
+- **Know what's happening now** — Live Updates show exactly what Claude is doing across all sessions
+- **Understand task dependencies** — See which tasks are blocked and what's holding them up
+- **Collaborate with Claude** — Add notes to tasks that Claude reads when it picks them up
+
+## Key Features
+
+### Live Updates
+Real-time feed of all in-progress tasks across every session. See what Claude is actively working on without switching terminals. Each update shows the current action and which session it belongs to.
+
+### Task Dependencies
+Tasks can block other tasks. The viewer shows these relationships clearly — blocked tasks display what they're waiting on, and you can trace dependency chains to understand the critical path. No more wondering why a task hasn't started.
+
+### Notes
+Add context to any task. Your notes are appended to the task description, so Claude sees them when it reads the task. Use this to clarify requirements, add constraints, or redirect work — all without interrupting Claude's flow.
+
+### Session Management
+Browse all your Claude Code sessions with progress indicators. Filter to active sessions only. Each session shows completion percentage!
+
 ## Installation
 
-### Quick start (npx)
+### Quick start
 
 ```bash
 npx claude-task-viewer
 ```
 
-Then open http://localhost:3456
+Open http://localhost:3456
 
 ### From source
 
@@ -25,20 +48,9 @@ npm install
 npm start
 ```
 
-## Features
+## How It Works
 
-- **Kanban board** — Tasks organised in Pending, In Progress, and Completed columns
-- **Live updates** — See tasks change status in real-time via SSE
-- **Session browser** — View all your Claude Code sessions
-- **Session names** — Shows custom names (from `/rename`), or the auto-generated slug
-- **All Tasks view** — Aggregate tasks across all sessions
-- **Task details** — Click any task to see full description with markdown rendering
-- **Progress tracking** — Visual progress bars and completion percentages
-- **Dependency tracking** — See which tasks block others
-
-## How it works
-
-Claude Code stores tasks in `~/.claude/tasks/`. Each session gets its own folder containing JSON files for each task.
+Claude Code stores tasks in `~/.claude/tasks/`. Each session has its own folder:
 
 ```
 ~/.claude/tasks/
@@ -48,58 +60,54 @@ Claude Code stores tasks in `~/.claude/tasks/`. Each session gets its own folder
       └── ...
 ```
 
-The viewer watches this directory and updates the UI in real-time.
+The viewer watches this directory and pushes updates via Server-Sent Events. Changes appear instantly — no polling, no refresh needed.
 
-## Task structure
+## Task Structure
 
 ```json
 {
   "id": "1",
-  "subject": "Task title",
-  "description": "Detailed markdown description",
-  "activeForm": "Present tense status shown while in progress",
-  "status": "pending | in_progress | completed",
-  "blocks": ["task-ids-this-blocks"],
-  "blockedBy": ["task-ids-blocking-this"]
+  "subject": "Implement user authentication",
+  "description": "Add JWT-based auth with refresh tokens",
+  "activeForm": "Setting up auth middleware",
+  "status": "in_progress",
+  "blocks": ["2", "3"],
+  "blockedBy": []
 }
 ```
 
+- `activeForm` — What Claude is doing right now (shown in Live Updates)
+- `blocks` / `blockedBy` — Task dependency relationships
+
 ## Configuration
 
-### Custom port
-
 ```bash
+# Custom port
 PORT=8080 npx claude-task-viewer
-```
 
-### Open browser automatically
-
-```bash
+# Open browser automatically
 npx claude-task-viewer --open
 ```
 
 ## API
-
-The viewer exposes a simple API:
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/sessions` | List all sessions with task counts |
 | `GET /api/sessions/:id` | Get all tasks for a session |
 | `GET /api/tasks/all` | Get all tasks across all sessions |
+| `POST /api/tasks/:session/:task/note` | Add a note to a task |
 | `GET /api/events` | SSE stream for live updates |
 
 ## Roadmap
 
-We're building deeper integrations with Claude Code:
+- **Shared task lists** — View tasks shared across multiple Claude Code sessions and subagents
+- **Task creation** — Create tasks from the viewer that Claude picks up
+- **CLI integration** — `claude-task-viewer add "Fix the bug"`
+- **Desktop notifications** — Know when tasks complete
+- **Export** — Push tasks to Linear, GitHub Issues, or Jira
 
-- **Shared task lists** — Support for `CLAUDE_CODE_TASK_LIST_ID` to view tasks shared across multiple sessions and subagents
-- **Task creation** — Create tasks directly from the viewer that Claude Code will pick up
-- **CLI commands** — `claude-task-viewer add "Fix the bug"` to create tasks from your terminal
-- **Desktop notifications** — Get notified when tasks complete or become unblocked
-- **Export to Linear/GitHub** — Push tasks to your existing project management tools
-
-Have ideas? [Open an issue](https://github.com/L1AD/claude-task-viewer/issues).
+[Open an issue](https://github.com/L1AD/claude-task-viewer/issues) with ideas or feedback.
 
 ## License
 
