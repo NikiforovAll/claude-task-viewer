@@ -327,6 +327,19 @@
       margin-top: 2px;
       white-space: nowrap;
       overflow: hidden;
+    }
+
+    .session-branch {
+      font-size: 10px;
+      color: var(--accent);
+      margin-top: 3px;
+      padding: 2px 6px;
+      background: var(--border);
+      border-radius: 3px;
+      display: inline-block;
+      font-family: var(--mono);
+      white-space: nowrap;
+      overflow: hidden;
       text-overflow: ellipsis;
     }
 
@@ -1257,6 +1270,7 @@
               ${hasInProgress ? '<span class="pulse"></span>' : ''}
             </div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
+            ${session.gitBranch ? `<div class="session-branch">${escapeHtml(session.gitBranch)}</div>` : ''}
             <div class="session-progress">
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
               <span class="progress-text">${session.completed}/${total}</span>
@@ -1277,7 +1291,8 @@
       const displayName = session.name || currentSessionId;
       sessionTitle.textContent = displayName;
       const projectName = session.project ? session.project.split('/').pop() : null;
-      sessionMeta.textContent = `${currentTasks.length} tasks${projectName ? ' · ' + projectName : ''} · ${formatDate(session.modifiedAt)}`;
+      const branchInfo = session.gitBranch ? ` · ${session.gitBranch}` : '';
+      sessionMeta.textContent = `${currentTasks.length} tasks${projectName ? ' · ' + projectName : ''}${branchInfo} · ${formatDate(session.modifiedAt)}`;
 
       const completed = currentTasks.filter(t => t.status === 'completed').length;
       const percent = currentTasks.length > 0 ? Math.round((completed / currentTasks.length) * 100) : 0;
