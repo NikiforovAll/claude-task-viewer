@@ -1019,27 +1019,6 @@
       border-color: #ef4444;
     }
 
-    #task-title-edit,
-    #task-desc-edit {
-      width: 100%;
-      font-family: var(--mono);
-      font-size: 13px;
-      line-height: 1.5;
-      background: var(--bg-elevated);
-      border: 1px solid var(--accent);
-      border-radius: 6px;
-      color: var(--text-primary);
-      padding: 10px 12px;
-      resize: vertical;
-    }
-
-    #task-title-edit:focus,
-    #task-desc-edit:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px var(--accent-dim);
-    }
-
     .column-header {
       display: flex;
       align-items: center;
@@ -1416,11 +1395,6 @@
               <span class="column-dot pending"></span>
               <span class="column-title pending">Pending</span>
               <span id="pending-count" class="column-count pending">0</span>
-              <button class="icon-btn" onclick="createTask('pending')" title="New task (N)" style="margin-left: auto;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </button>
             </div>
             <div id="pending-tasks" class="column-tasks"></div>
           </div>
@@ -1430,11 +1404,6 @@
               <span class="column-dot in-progress"></span>
               <span class="column-title in-progress">In Progress</span>
               <span id="in-progress-count" class="column-count in-progress">0</span>
-              <button class="icon-btn" onclick="createTask('in_progress')" title="New task (N)" style="margin-left: auto;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </button>
             </div>
             <div id="in-progress-tasks" class="column-tasks"></div>
           </div>
@@ -1444,11 +1413,6 @@
               <span class="column-dot completed"></span>
               <span class="column-title completed">Completed</span>
               <span id="completed-count" class="column-count completed">0</span>
-              <button class="icon-btn" onclick="createTask('completed')" title="New task (N)" style="margin-left: auto;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </button>
             </div>
             <div id="completed-tasks" class="column-tasks"></div>
           </div>
@@ -1541,91 +1505,6 @@
       searchQuery = '';
       document.getElementById('search-clear-btn').classList.remove('visible');
       renderSessions();
-    }
-
-    let editingSessionId = null;
-
-    function editSessionMetadata(sessionId) {
-      const session = sessions.find(s => s.id === sessionId);
-      if (!session) return;
-
-      editingSessionId = sessionId;
-
-      // Pre-fill the form
-      const nameInput = document.getElementById('session-name-input');
-      const descInput = document.getElementById('session-description-input');
-
-      nameInput.value = session.name || '';
-      descInput.value = session.description || '';
-
-      // Show the modal
-      const modal = document.getElementById('edit-session-modal');
-      modal.classList.add('visible');
-
-      // Focus the name input
-      setTimeout(() => nameInput.focus(), 100);
-
-      // Handle keyboard shortcuts
-      const keyHandler = (e) => {
-        if (e.key === 'Escape') {
-          closeEditSessionModal();
-          document.removeEventListener('keydown', keyHandler);
-        } else if (e.key === 'Enter') {
-          // Allow Enter in textarea for new lines, Cmd/Ctrl+Enter or plain Enter elsewhere to save
-          if (e.target.tagName === 'TEXTAREA' && !e.metaKey && !e.ctrlKey) {
-            return; // Let textarea handle Enter normally
-          }
-          e.preventDefault();
-          saveSessionMetadata();
-          document.removeEventListener('keydown', keyHandler);
-        }
-      };
-      document.addEventListener('keydown', keyHandler);
-    }
-
-    function closeEditSessionModal() {
-      const modal = document.getElementById('edit-session-modal');
-      modal.classList.remove('visible');
-      editingSessionId = null;
-    }
-
-    async function saveSessionMetadata() {
-      if (!editingSessionId) return;
-
-      const nameInput = document.getElementById('session-name-input');
-      const descInput = document.getElementById('session-description-input');
-
-      const newName = nameInput.value.trim();
-      const newDescription = descInput.value.trim();
-
-      try {
-        const res = await fetch(`/api/sessions/${editingSessionId}/metadata`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customName: newName,
-            description: newDescription
-          })
-        });
-
-        if (!res.ok) {
-          const error = await res.json();
-          alert('Failed to update session: ' + (error.error || 'Unknown error'));
-          return;
-        }
-
-        // Close modal
-        closeEditSessionModal();
-
-        // Refresh sessions to show updated name/description
-        await fetchSessions();
-        if (currentSessionId === editingSessionId) {
-          await fetchTasks(editingSessionId);
-        }
-      } catch (error) {
-        console.error('Error updating session metadata:', error);
-        alert('Failed to update session metadata');
-      }
     }
 
     function deleteAllSessionTasks(sessionId) {
@@ -2036,15 +1915,9 @@
 
       const displayName = session.name || currentSessionId;
 
-      // Create header with edit and delete buttons
+      // Create header with delete button
       sessionTitle.innerHTML = `
         <span style="flex: 1;">${escapeHtml(displayName)}</span>
-        <button class="icon-btn" onclick="editSessionMetadata('${session.id}')" title="Edit session name and description">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
         <button class="icon-btn icon-btn-danger" onclick="deleteAllSessionTasks('${session.id}')" title="Delete all tasks in this session">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -2193,10 +2066,26 @@
     function handleDragOver(e) {
       if (!draggedElement) return;
 
+      const dropZone = e.currentTarget;
+      const currentStatus = draggedElement.dataset.currentStatus;
+
+      // Determine target status from drop zone
+      let targetStatus = 'pending';
+      if (dropZone.id === 'in-progress-tasks') {
+        targetStatus = 'in_progress';
+      } else if (dropZone.id === 'completed-tasks') {
+        targetStatus = 'completed';
+      }
+
+      // Only allow dragging within the same column
+      if (currentStatus !== targetStatus) {
+        e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
 
-      const dropZone = e.currentTarget;
       if (!dropZone.classList.contains('drag-over')) {
         dropZone.classList.add('drag-over');
       }
@@ -2224,7 +2113,6 @@
       const taskId = draggedElement.dataset.taskId;
       const sessionId = draggedElement.dataset.sessionId;
       const currentStatus = draggedElement.dataset.currentStatus;
-      const isBlocked = draggedElement.dataset.isBlocked === 'true';
 
       // Determine new status from drop zone
       let newStatus = 'pending';
@@ -2234,41 +2122,14 @@
         newStatus = 'completed';
       }
 
-      // Handle reordering within the same column
-      if (currentStatus === newStatus) {
-        await handleReorder(e, dropZone, taskId, sessionId, newStatus);
-        return;
+      // Only allow reordering within the same column
+      // Task status changes are controlled by Claude Code, not the UI
+      if (currentStatus !== newStatus) {
+        return; // Silently reject cross-column drops
       }
 
-      // Validate: can't move blocked tasks to in_progress
-      if (newStatus === 'in_progress' && isBlocked) {
-        const task = currentTasks.find(t => t.id === taskId && (!sessionId || t.sessionId === sessionId));
-        if (task) {
-          showBlockedTaskModal(task);
-        }
-        return;
-      }
-
-      // Update task status via API
-      try {
-        const res = await fetch(`/api/tasks/${sessionId}/${taskId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus })
-        });
-
-        if (res.ok) {
-          await refreshCurrentView();
-        } else {
-          const error = await res.json();
-          alert('Failed to update task: ' + (error.error || 'Unknown error'));
-          await refreshCurrentView(); // Refresh to restore original state
-        }
-      } catch (error) {
-        console.error('Failed to update task:', error);
-        alert('Failed to update task');
-        await refreshCurrentView();
-      }
+      // Handle reordering within the column
+      await handleReorder(e, dropZone, taskId, sessionId, newStatus);
     }
 
     async function handleReorder(e, dropZone, draggedTaskId, sessionId, status) {
@@ -2557,21 +2418,9 @@
           <div style="display: flex; justify-content: space-between; align-items: start;">
             <div style="flex: 1;">
               <div class="detail-label">Task #${task.id}</div>
-              <h2 id="task-title-display" class="detail-title">${escapeHtml(task.subject)}</h2>
-              <textarea id="task-title-edit" class="note-input" style="display: none; margin-top: 8px;">${escapeHtml(task.subject)}</textarea>
+              <h2 class="detail-title">${escapeHtml(task.subject)}</h2>
             </div>
             <div style="display: flex; gap: 8px;">
-              <button id="edit-task-btn" class="icon-btn" title="Edit task (E)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
-              <button id="cancel-edit-btn" class="icon-btn" title="Cancel edit (Esc)" style="display: none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
               <button id="delete-task-btn" class="icon-btn" title="Delete task (D)" style="color: #ef4444; border-color: #ef4444;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
@@ -2583,12 +2432,11 @@
 
         <div class="detail-section">
           <div class="detail-label">Status</div>
-          <select id="status-select" class="filter-dropdown" style="width: 200px;" onchange="updateTaskStatus('${task.id}', '${actualSessionId}', this.value)">
-            <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>Pending</option>
-            <option value="in_progress" ${task.status === 'in_progress' ? 'selected' : ''} ${isBlocked ? 'disabled' : ''}>In Progress</option>
-            <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
-          </select>
-          ${isBlocked && task.status !== 'in_progress' ? '<div style="font-size: 10px; color: var(--warning); margin-top: 4px;">Cannot start while blocked</div>' : ''}
+          <div style="font-size: 14px; color: var(--text-primary); padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px; display: inline-block;">
+            ${task.status === 'pending' ? 'Pending' : task.status === 'in_progress' ? 'In Progress' : 'Completed'}
+          </div>
+          ${isBlocked && task.status !== 'in_progress' ? '<div style="font-size: 10px; color: var(--warning); margin-top: 4px;">Blocked by dependencies</div>' : ''}
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Status is controlled by Claude Code</div>
         </div>
 
         ${task.activeForm && task.status === 'in_progress' ? `
@@ -2600,49 +2448,26 @@
         ` : ''}
 
         <div class="detail-section">
-          <div class="detail-label">Blocked By <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(optional)</span></div>
-          <div id="blocked-by-display" class="detail-desc">
+          <div class="detail-label">Blocked By</div>
+          <div class="detail-desc">
             ${task.blockedBy && task.blockedBy.length > 0
               ? `<div class="detail-box blocked"><strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}</div>`
               : '<em style="color: var(--text-muted); font-size: 13px;">No dependencies</em>'}
           </div>
-          <select
-            id="blocked-by-edit"
-            multiple
-            class="form-input"
-            style="display: none; height: 120px;"
-          >
-            ${getAvailableTasksOptions(task.id)}
-          </select>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: none;" id="blocked-by-help">
-            Hold Ctrl/Cmd to select multiple tasks
-          </div>
         </div>
 
         <div class="detail-section">
-          <div class="detail-label">Blocks <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(optional)</span></div>
-          <div id="blocks-display" class="detail-desc">
+          <div class="detail-label">Blocks</div>
+          <div class="detail-desc">
             ${task.blocks && task.blocks.length > 0
               ? `<div class="detail-box blocks"><strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}</div>`
               : '<em style="color: var(--text-muted); font-size: 13px;">No tasks blocked</em>'}
-          </div>
-          <select
-            id="blocks-edit"
-            multiple
-            class="form-input"
-            style="display: none; height: 120px;"
-          >
-            ${getAvailableTasksOptions(task.id)}
-          </select>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: none;" id="blocks-help">
-            Hold Ctrl/Cmd to select multiple tasks
           </div>
         </div>
 
         <div class="detail-section">
           <div class="detail-label">Description</div>
-          <div id="task-desc-display" class="detail-desc">${task.description ? DOMPurify.sanitize(marked.parse(task.description)) : '<em style="color: var(--text-muted);">No description</em>'}</div>
-          <textarea id="task-desc-edit" class="note-input" style="display: none; min-height: 100px;">${escapeHtml(task.description || '')}</textarea>
+          <div class="detail-desc">${task.description ? DOMPurify.sanitize(marked.parse(task.description)) : '<em style="color: var(--text-muted);">No description</em>'}</div>
         </div>
 
         <div class="detail-section note-section">
@@ -2655,8 +2480,6 @@
       `;
 
       // Setup button handlers
-      document.getElementById('edit-task-btn').onclick = () => toggleEditMode(task.id, actualSessionId);
-      document.getElementById('cancel-edit-btn').onclick = () => cancelEditMode(task.id, actualSessionId);
       document.getElementById('delete-task-btn').onclick = () => deleteTask(task.id, actualSessionId);
     }
 
@@ -2691,137 +2514,6 @@
 
     function closeDetailPanel() {
       detailPanel.classList.remove('visible');
-    }
-
-    let isEditMode = false;
-    let currentEditTaskId = null;
-    let currentEditSessionId = null;
-
-    async function toggleEditMode(taskId, sessionId) {
-      const titleDisplay = document.getElementById('task-title-display');
-      const titleEdit = document.getElementById('task-title-edit');
-      const descDisplay = document.getElementById('task-desc-display');
-      const descEdit = document.getElementById('task-desc-edit');
-      const blockedByDisplay = document.getElementById('blocked-by-display');
-      const blockedByEdit = document.getElementById('blocked-by-edit');
-      const blockedByHelp = document.getElementById('blocked-by-help');
-      const blocksDisplay = document.getElementById('blocks-display');
-      const blocksEdit = document.getElementById('blocks-edit');
-      const blocksHelp = document.getElementById('blocks-help');
-      const editBtn = document.getElementById('edit-task-btn');
-      const cancelBtn = document.getElementById('cancel-edit-btn');
-      const deleteBtn = document.getElementById('delete-task-btn');
-
-      if (!isEditMode) {
-        // Enter edit mode
-        titleDisplay.style.display = 'none';
-        titleEdit.style.display = 'block';
-        descDisplay.style.display = 'none';
-        descEdit.style.display = 'block';
-        blockedByDisplay.style.display = 'none';
-        blockedByEdit.style.display = 'block';
-        blockedByHelp.style.display = 'block';
-        blocksDisplay.style.display = 'none';
-        blocksEdit.style.display = 'block';
-        blocksHelp.style.display = 'block';
-
-        // Set selected options in dropdowns based on current task values
-        const task = currentTasks.find(t => t.id === taskId);
-        if (task) {
-          // Set blocked-by selections
-          Array.from(blockedByEdit.options).forEach(option => {
-            option.selected = task.blockedBy && task.blockedBy.includes(option.value);
-          });
-
-          // Set blocks selections
-          Array.from(blocksEdit.options).forEach(option => {
-            option.selected = task.blocks && task.blocks.includes(option.value);
-          });
-        }
-
-        editBtn.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 13l4 4L19 7"/>
-          </svg>
-        `;
-        editBtn.title = 'Save changes';
-        cancelBtn.style.display = 'flex';
-        deleteBtn.style.display = 'none';
-        titleEdit.focus();
-        isEditMode = true;
-        currentEditTaskId = taskId;
-        currentEditSessionId = sessionId;
-      } else {
-        // Save and exit edit mode
-        const newSubject = titleEdit.value.trim();
-        const newDescription = descEdit.value.trim();
-
-        if (!newSubject) {
-          alert('Subject cannot be empty');
-          return;
-        }
-
-        // Get selected values from multi-select dropdowns
-        const blockedBy = Array.from(blockedByEdit.selectedOptions).map(opt => opt.value);
-        const blocks = Array.from(blocksEdit.selectedOptions).map(opt => opt.value);
-
-        try {
-          const res = await fetch(`/api/tasks/${sessionId}/${taskId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              subject: newSubject,
-              description: newDescription,
-              blockedBy: blockedBy.length > 0 ? blockedBy : undefined,
-              blocks: blocks.length > 0 ? blocks : undefined
-            })
-          });
-
-          if (res.ok) {
-            await refreshCurrentView();
-            showTaskDetail(taskId, sessionId);
-            isEditMode = false;
-            currentEditTaskId = null;
-            currentEditSessionId = null;
-          } else {
-            const error = await res.json();
-            alert('Failed to update task: ' + (error.error || 'Unknown error'));
-          }
-        } catch (error) {
-          console.error('Failed to update task:', error);
-          alert('Failed to update task');
-        }
-      }
-    }
-
-    function cancelEditMode(taskId, sessionId) {
-      isEditMode = false;
-      currentEditTaskId = null;
-      currentEditSessionId = null;
-      showTaskDetail(taskId, sessionId);
-    }
-
-    async function updateTaskStatus(taskId, sessionId, newStatus) {
-      try {
-        const res = await fetch(`/api/tasks/${sessionId}/${taskId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus })
-        });
-
-        if (res.ok) {
-          await refreshCurrentView();
-          showTaskDetail(taskId, sessionId);
-        } else {
-          const error = await res.json();
-          alert('Failed to update status: ' + (error.error || 'Unknown error'));
-          // Reset dropdown
-          document.getElementById('status-select').value = currentTasks.find(t => t.id === taskId).status;
-        }
-      } catch (error) {
-        console.error('Failed to update status:', error);
-        alert('Failed to update status');
-      }
     }
 
     let deleteTaskId = null;
@@ -2993,58 +2685,6 @@
       }
     }
 
-    let newTaskStatus = 'pending';
-
-    function createTask(status = 'pending') {
-      newTaskStatus = status;
-
-      // Clear the form
-      document.getElementById('task-subject-input').value = '';
-      document.getElementById('task-description-input').value = '';
-
-      // Populate and clear dependency dropdowns
-      const blockedBySelect = document.getElementById('task-blocked-by-input');
-      const blocksSelect = document.getElementById('task-blocks-input');
-
-      // Populate options
-      const options = getAvailableTasksOptions();
-      blockedBySelect.innerHTML = options;
-      blocksSelect.innerHTML = options;
-
-      // Clear selections
-      blockedBySelect.selectedIndex = -1;
-      blocksSelect.selectedIndex = -1;
-
-      // Show the modal
-      const modal = document.getElementById('create-task-modal');
-      modal.classList.add('visible');
-
-      // Focus the subject input
-      setTimeout(() => document.getElementById('task-subject-input').focus(), 100);
-
-      // Handle keyboard shortcuts
-      const keyHandler = (e) => {
-        if (e.key === 'Escape') {
-          closeCreateTaskModal();
-          document.removeEventListener('keydown', keyHandler);
-        } else if (e.key === 'Enter') {
-          // Allow Enter in textarea for new lines, Cmd/Ctrl+Enter or plain Enter elsewhere to save
-          if (e.target.tagName === 'TEXTAREA' && !e.metaKey && !e.ctrlKey) {
-            return; // Let textarea handle Enter normally
-          }
-          e.preventDefault();
-          saveNewTask();
-          document.removeEventListener('keydown', keyHandler);
-        }
-      };
-      document.addEventListener('keydown', keyHandler);
-    }
-
-    function closeCreateTaskModal() {
-      const modal = document.getElementById('create-task-modal');
-      modal.classList.remove('visible');
-    }
-
     function showHelpModal() {
       const modal = document.getElementById('help-modal');
       modal.classList.add('visible');
@@ -3063,68 +2703,6 @@
     function closeHelpModal() {
       const modal = document.getElementById('help-modal');
       modal.classList.remove('visible');
-    }
-
-    async function saveNewTask() {
-      const subjectInput = document.getElementById('task-subject-input');
-      const descInput = document.getElementById('task-description-input');
-      const blockedBySelect = document.getElementById('task-blocked-by-input');
-      const blocksSelect = document.getElementById('task-blocks-input');
-
-      const subject = subjectInput.value.trim();
-      if (!subject) {
-        alert('Task subject is required');
-        subjectInput.focus();
-        return;
-      }
-
-      const description = descInput.value.trim();
-      const sessionId = currentSessionId;
-
-      if (!sessionId) {
-        alert('No session selected. Please select a session first.');
-        return;
-      }
-
-      // Get selected values from dropdowns
-      const blockedBy = Array.from(blockedBySelect.selectedOptions).map(opt => opt.value);
-      const blocks = Array.from(blocksSelect.selectedOptions).map(opt => opt.value);
-
-      // Build request body
-      const taskData = {
-        subject,
-        description,
-        status: newTaskStatus
-      };
-
-      // Only include blockedBy/blocks if they have values
-      if (blockedBy.length > 0) {
-        taskData.blockedBy = blockedBy;
-      }
-      if (blocks.length > 0) {
-        taskData.blocks = blocks;
-      }
-
-      try {
-        const res = await fetch(`/api/tasks/${sessionId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(taskData)
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          closeCreateTaskModal();
-          await refreshCurrentView();
-          showTaskDetail(data.task.id, sessionId);
-        } else {
-          const error = await res.json();
-          alert('Failed to create task: ' + (error.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Failed to create task:', error);
-        alert('Failed to create task');
-      }
     }
 
     async function refreshCurrentView() {
@@ -3146,18 +2724,15 @@
       }
 
       if (e.key === 'Escape' && detailPanel.classList.contains('visible')) {
-        if (isEditMode && currentEditTaskId && currentEditSessionId) {
-          cancelEditMode(currentEditTaskId, currentEditSessionId);
-        } else {
-          closeDetailPanel();
-        }
+        closeDetailPanel();
       }
 
-      if (detailPanel.classList.contains('visible') && !isEditMode) {
-        const titleEdit = document.getElementById('task-title-edit');
-        if (!titleEdit) return;
+      if (detailPanel.classList.contains('visible')) {
+        // Get task ID from detail panel
+        const labelElement = document.querySelector('.detail-label');
+        if (!labelElement) return;
 
-        const taskId = titleEdit.closest('.detail-content')?.querySelector('.detail-label')?.textContent.match(/\d+/)?.[0];
+        const taskId = labelElement.textContent.match(/\d+/)?.[0];
         if (!taskId) return;
 
         const task = currentTasks.find(t => t.id === taskId);
@@ -3165,18 +2740,10 @@
 
         const sessionId = task.sessionId || currentSessionId;
 
-        if (e.key === 'e' || e.key === 'E') {
-          e.preventDefault();
-          toggleEditMode(taskId, sessionId);
-        } else if (e.key === 'd' || e.key === 'D') {
+        if (e.key === 'd' || e.key === 'D') {
           e.preventDefault();
           deleteTask(taskId, sessionId);
         }
-      }
-
-      if (e.key === 'n' || e.key === 'N') {
-        e.preventDefault();
-        createTask();
       }
 
       if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
@@ -3315,109 +2882,6 @@
     });
   </script>
 
-  <!-- Edit Session Modal -->
-  <div id="edit-session-modal" class="modal-overlay" onclick="closeEditSessionModal()">
-    <div class="modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 class="modal-title">Edit Session</h3>
-        <button class="modal-close" onclick="closeEditSessionModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label" for="session-name-input">Session Name</label>
-          <input
-            type="text"
-            id="session-name-input"
-            class="form-input"
-            placeholder="Enter a custom name for this session..."
-          />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="session-description-input">Description</label>
-          <textarea
-            id="session-description-input"
-            class="form-input"
-            placeholder="Add a description (optional)..."
-          ></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeEditSessionModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveSessionMetadata()">Save Changes</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create Task Modal -->
-  <div id="create-task-modal" class="modal-overlay" onclick="closeCreateTaskModal()">
-    <div class="modal" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 class="modal-title">Create New Task</h3>
-        <button class="modal-close" onclick="closeCreateTaskModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label" for="task-subject-input">Task Subject *</label>
-          <input
-            type="text"
-            id="task-subject-input"
-            class="form-input"
-            placeholder="Enter task title..."
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="task-description-input">Description</label>
-          <textarea
-            id="task-description-input"
-            class="form-input"
-            placeholder="Add a description (optional)..."
-          ></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="task-blocked-by-input">Blocked By <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(optional)</span></label>
-          <select
-            id="task-blocked-by-input"
-            multiple
-            class="form-input"
-            style="height: 100px;"
-          >
-            <!-- Options will be populated when modal opens -->
-          </select>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-            Hold Ctrl/Cmd to select multiple tasks
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="task-blocks-input">Blocks <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(optional)</span></label>
-          <select
-            id="task-blocks-input"
-            multiple
-            class="form-input"
-            style="height: 100px;"
-          >
-            <!-- Options will be populated when modal opens -->
-          </select>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-            Hold Ctrl/Cmd to select multiple tasks
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeCreateTaskModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveNewTask()">Create Task</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Help Modal -->
   <div id="help-modal" class="modal-overlay" onclick="closeHelpModal()">
     <div class="modal" onclick="event.stopPropagation()">
@@ -3439,10 +2903,6 @@
                 <td style="padding: 4px 0; color: var(--text-primary);">Show keyboard shortcuts</td>
               </tr>
               <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">N</kbd></td>
-                <td style="padding: 4px 0; color: var(--text-primary);">Create new task</td>
-              </tr>
-              <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Esc</kbd></td>
                 <td style="padding: 4px 0; color: var(--text-primary);">Close panels or cancel</td>
               </tr>
@@ -3451,10 +2911,6 @@
           <div>
             <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Task Actions</h4>
             <table style="width: 100%; font-size: 13px;">
-              <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">E</kbd></td>
-                <td style="padding: 4px 0; color: var(--text-primary);">Edit selected task</td>
-              </tr>
               <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">D</kbd></td>
                 <td style="padding: 4px 0; color: var(--text-primary);">Delete selected task</td>
@@ -3466,12 +2922,12 @@
             <table style="width: 100%; font-size: 13px;">
               <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);" colspan="2">
-                  <strong>Move to different column:</strong> Changes task status
+                  <strong>Reorder within column:</strong> Drag tasks up or down within the same column to change priority order
                 </td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);" colspan="2">
-                  <strong>Reorder within same column:</strong> Changes task order (see position numbers)
+                  <em>Note: Task status (Pending/In Progress/Completed) is controlled by Claude Code, not the UI</em>
                 </td>
               </tr>
             </table>
