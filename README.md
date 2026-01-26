@@ -1,6 +1,6 @@
 # Claude Task Viewer
 
-A real-time Kanban board for monitoring Claude Code tasks. See what Claude is working on, track dependencies between tasks, and add notes that Claude can read.
+A real-time Kanban board for **observing** Claude Code tasks. See what Claude is working on, track dependencies between tasks, and manage task cleanup and priority.
 
 ![Dark mode](screenshot-dark-v2.png)
 
@@ -13,27 +13,32 @@ When Claude Code breaks down complex work into tasks, you get visibility into it
 - **See the big picture** — All your sessions and tasks in one place
 - **Know what's happening now** — Live Updates show exactly what Claude is doing across all sessions
 - **Understand task dependencies** — See which tasks are blocked and what's holding them up
-- **Collaborate with Claude** — Add notes to tasks that Claude reads when it picks them up
+- **Clean up completed work** — Delete tasks when no longer needed (with dependency checking)
 
 ## Key Features
 
-### Live Updates
-Real-time feed of all in-progress tasks across every session. See what Claude is actively working on without switching terminals. Each update shows the current action and which session it belongs to.
+### Observation-Focused Design
+Claude Code controls task state — the viewer shows you what's happening:
+- **Real-time status** — See tasks move through Pending → In Progress → Completed as Claude works
+- **Active session detection** — Indicators show which sessions have in-progress tasks
+- **Task dependencies** — Visualise blockedBy/blocks relationships to understand the critical path
+- **Live activity feed** — Real-time stream of all in-progress tasks across every session
 
-### Task Dependencies
-Tasks can block other tasks. The viewer shows these relationships clearly — blocked tasks display what they're waiting on, and you can trace dependency chains to understand the critical path. No more wondering why a task hasn't started.
-
-### Notes
-Add context to any task. Your notes are appended to the task description, so Claude sees them when it reads the task. Use this to clarify requirements, add constraints, or redirect work — all without interrupting Claude's flow.
-
-### Search
-Find tasks instantly. Type in the search box to filter across all columns by subject or description. Case-insensitive, real-time results.
-
-### Project Filtering
-Filter tasks by project using the dropdown. Working on multiple codebases? See only what's relevant. Combine with the session filter to show just active sessions for a specific project.
+### Cleanup Operations
+- **Delete tasks** — Remove tasks with the delete button or press `D` (includes safety checks for dependencies)
+- **Bulk delete** — Delete all tasks in a session at once
 
 ### Session Management
-Browse all your Claude Code sessions with progress indicators. Filter to active sessions only, or show everything. Each session shows completion percentage.
+View and organize your Claude Code sessions:
+- **Session discovery** — Automatically finds all sessions in `~/.claude/tasks/` and `~/.claude/projects/`
+- **View project paths** — See the full filesystem path for each project
+- **Fuzzy search** — Search across session names, task descriptions, and project paths with instant filtering
+- **Session limits** — Filter to show only active sessions or a specific number of recent sessions
+
+### Keyboard Shortcuts
+- `?` — Show help with all keyboard shortcuts
+- `D` — Delete the currently selected task (with confirmation and dependency checking)
+- `Esc` — Close detail panel or modals
 
 ## Installation
 
@@ -100,21 +105,37 @@ npx claude-task-viewer --dir=~/.claude-work
 
 ## API
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/sessions` | List all sessions with task counts |
-| `GET /api/sessions/:id` | Get all tasks for a session |
-| `GET /api/tasks/all` | Get all tasks across all sessions |
-| `POST /api/tasks/:session/:task/note` | Add a note to a task |
-| `GET /api/events` | SSE stream for live updates |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sessions` | GET | List all sessions with task counts |
+| `/api/sessions/:id` | GET | Get all tasks for a session |
+| `/api/tasks/all` | GET | Get all tasks across all sessions |
+| `/api/tasks/:session/:task` | DELETE | Delete a task (checks dependencies) |
+| `/api/tasks/:session/:task/note` | POST | Add a note to a task |
+| `/api/events` | GET | SSE stream for live updates |
+
+## Design Philosophy
+
+**Observation over Control**: Claude Code owns task state. The task viewer's job is to show you what Claude is doing, not to direct it. This keeps the viewer in sync with reality and prevents confusion about whether a task's status reflects what Claude is actually doing or just human intent.
+
+**Limited interaction:** You can delete tasks and add notes, but task status, subject, and description reflect Claude's actual work and can only be changed by Claude Code itself.
 
 ## Roadmap
 
-- **Shared task lists** — View tasks shared across multiple Claude Code sessions and subagents
-- **Task creation** — Create tasks from the viewer that Claude picks up
-- **CLI integration** — `claude-task-viewer add "Fix the bug"`
-- **Desktop notifications** — Know when tasks complete
-- **Export** — Push tasks to Linear, GitHub Issues, or Jira
+### ✅ Completed
+- **Real-time observation** — Live updates feed showing what Claude is doing across all sessions
+- **Task dependencies** — Visualise blockedBy/blocks relationships
+- **Task deletion** — Delete tasks with dependency checking
+- **Keyboard shortcuts** — ?, D, Esc for quick actions
+- **Session discovery** — Automatic detection of all Claude Code sessions
+- **Search** — Search across sessions and tasks
+
+### 🚧 Planned
+- **Enhanced search & filter** — Filter by status, dependencies, date ranges
+- **Session grouping** — Group sessions by project or time period
+- **Task timeline** — See when tasks were created and completed
+- **Export** — Export session data for analysis or reporting
+- **Desktop notifications** — Optional notifications when tasks complete
 
 [Open an issue](https://github.com/L1AD/claude-task-viewer/issues) with ideas or feedback.
 

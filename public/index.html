@@ -343,6 +343,21 @@
       text-overflow: ellipsis;
     }
 
+    .session-branch {
+      font-size: 10px;
+      color: var(--accent);
+      margin-top: 3px;
+      padding: 2px 6px;
+      background: var(--border);
+      border-radius: 3px;
+      display: inline-block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    }
+
     .session-progress {
       display: flex;
       align-items: center;
@@ -451,6 +466,9 @@
       font-size: 20px;
       font-weight: 400;
       letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     .view-meta {
@@ -505,6 +523,16 @@
     .icon-btn svg {
       width: 16px;
       height: 16px;
+    }
+
+    .icon-btn-danger {
+      color: #ef4444;
+    }
+
+    .icon-btn-danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      border-color: #ef4444;
     }
 
     /* Kanban */
@@ -961,6 +989,265 @@
     body.light::before {
       display: none;
     }
+
+    /* Interactive elements */
+    .icon-btn.delete:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+    }
+
+    .column-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .column-header .icon-btn {
+      width: 28px;
+      height: 28px;
+    }
+
+    .column-header .icon-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Search input */
+    .search-container {
+      position: relative;
+      padding: 0 12px 8px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 8px 32px 8px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .search-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 18px;
+      top: 8px;
+      width: 20px;
+      height: 20px;
+      background: none;
+      border: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 3px;
+    }
+
+    .search-clear:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .search-clear.visible {
+      display: flex;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .modal-close:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 80px;
+      font-family: var(--mono);
+    }
+
+    select.form-input[multiple] {
+      padding: 4px;
+    }
+
+    select.form-input optgroup {
+      background: var(--bg-surface);
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 8px 8px 4px 8px;
+      margin-top: 4px;
+      font-style: normal;
+    }
+
+    select.form-input optgroup:first-child {
+      margin-top: 0;
+    }
+
+    select.form-input option {
+      padding: 8px 8px 8px 16px;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-weight: 400;
+      font-size: 13px;
+      border-radius: 4px;
+      margin: 2px 4px;
+    }
+
+    select.form-input option:checked {
+      background: var(--accent);
+      color: var(--bg-deep);
+      font-weight: 500;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #d96329;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
@@ -995,7 +1282,22 @@
       <!-- Tasks -->
       <div class="sidebar-section flex-1">
         <div class="section-header">
-          <span>Tasks</span>
+          <span>Sessions</span>
+          <button onclick="showAllTasks()" style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 10px; color: var(--text-secondary); cursor: pointer; font-family: var(--mono);">All Tasks</button>
+        </div>
+        <div class="search-container">
+          <input
+            id="search-input"
+            type="text"
+            class="search-input"
+            placeholder="Search tasks, sessions, projects..."
+            oninput="handleSearch(this.value)"
+          />
+          <button id="search-clear-btn" class="search-clear" onclick="clearSearch()" title="Clear search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
         <div class="filter-row">
           <select id="project-filter" class="filter-dropdown" onchange="filterByProject(this.value)">
@@ -1004,6 +1306,14 @@
           <select id="session-filter" class="filter-dropdown" onchange="filterBySessions(this.value)">
             <option value="all">All Sessions</option>
             <option value="active">Active Only</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <select id="session-limit" class="filter-dropdown" onchange="changeSessionLimit(this.value)">
+            <option value="10">Show 10</option>
+            <option value="20">Show 20</option>
+            <option value="50">Show 50</option>
+            <option value="all">Show All</option>
           </select>
         </div>
         <div id="sessions-list" class="sessions-list"></div>
@@ -1045,6 +1355,13 @@
               <svg id="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
                 <circle cx="12" cy="12" r="5"/>
                 <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </svg>
+            </button>
+            <button class="icon-btn" onclick="showHelpModal()" title="Keyboard shortcuts (?)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
               </svg>
             </button>
           </div>
@@ -1102,7 +1419,11 @@
     let currentTasks = [];
     let viewMode = 'session';
     let sessionFilter = localStorage.getItem('sessionFilter') || 'all'; // 'all' or 'active'
+    let sessionLimit = localStorage.getItem('sessionLimit') || '20'; // '10', '20', '50', 'all'
     let filterProject = null; // null = all projects, or project path to filter
+    let searchQuery = ''; // Search query for fuzzy search
+    let allTasksCache = []; // Cache all tasks for search
+    let bulkDeleteSessionId = null; // Track session for bulk delete
 
     // DOM
     const sessionsList = document.getElementById('sessions-list');
@@ -1123,14 +1444,234 @@
     const connectionStatus = document.getElementById('connection-status');
 
     async function fetchSessions() {
+      console.log('[fetchSessions] Starting...');
       try {
-        const res = await fetch('/api/sessions');
+        const res = await fetch(`/api/sessions?limit=${sessionLimit}`);
         sessions = await res.json();
+        console.log('[fetchSessions] Sessions loaded:', sessions.length);
+
+        // Fetch all tasks for search
+        const tasksRes = await fetch('/api/tasks/all');
+        allTasksCache = await tasksRes.json();
+        console.log('[fetchSessions] Tasks cache loaded');
+
         renderSessions();
+        console.log('[fetchSessions] Render complete');
         fetchLiveUpdates();
       } catch (error) {
         console.error('Failed to fetch sessions:', error);
       }
+    }
+
+    function handleSearch(query) {
+      searchQuery = query.toLowerCase().trim();
+
+      // Show/hide clear button
+      const clearBtn = document.getElementById('search-clear-btn');
+      if (searchQuery) {
+        clearBtn.classList.add('visible');
+      } else {
+        clearBtn.classList.remove('visible');
+      }
+
+      renderSessions();
+    }
+
+    function clearSearch() {
+      const searchInput = document.getElementById('search-input');
+      searchInput.value = '';
+      searchQuery = '';
+      document.getElementById('search-clear-btn').classList.remove('visible');
+      renderSessions();
+    }
+
+    function deleteAllSessionTasks(sessionId) {
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      // When viewing a single session, currentTasks already contains only that session's tasks
+      // When viewing "All Tasks", tasks have sessionId property, so we filter
+      const sessionTasks = currentSessionId === sessionId
+        ? currentTasks
+        : currentTasks.filter(t => t.sessionId === sessionId);
+
+      if (sessionTasks.length === 0) {
+        alert('No tasks to delete in this session');
+        return;
+      }
+
+      bulkDeleteSessionId = sessionId;
+
+      const displayName = session.name || sessionId;
+      const message = `Delete all ${sessionTasks.length} task(s) from session "${displayName}"?`;
+
+      document.getElementById('delete-session-tasks-message').textContent = message;
+
+      const modal = document.getElementById('delete-session-tasks-modal');
+      modal.classList.add('visible');
+
+      // Handle ESC key
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeDeleteSessionTasksModal();
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+      document.addEventListener('keydown', keyHandler);
+    }
+
+    function closeDeleteSessionTasksModal() {
+      const modal = document.getElementById('delete-session-tasks-modal');
+      modal.classList.remove('visible');
+      bulkDeleteSessionId = null;
+    }
+
+    async function confirmDeleteSessionTasks() {
+      if (!bulkDeleteSessionId) return;
+
+      const sessionId = bulkDeleteSessionId;
+      closeDeleteSessionTasksModal();
+
+      // Get tasks to delete
+      const sessionTasks = currentSessionId === sessionId
+        ? currentTasks
+        : currentTasks.filter(t => t.sessionId === sessionId);
+
+      // Sort tasks by dependency order (blocked tasks first, then blockers)
+      const sortedTasks = topologicalSort(sessionTasks);
+
+      let successCount = 0;
+      let failedCount = 0;
+      const failedTasks = [];
+
+      for (const task of sortedTasks) {
+        try {
+          const res = await fetch(`/api/tasks/${sessionId}/${task.id}`, {
+            method: 'DELETE'
+          });
+
+          if (res.ok) {
+            successCount++;
+          } else {
+            failedCount++;
+            const error = await res.json();
+            failedTasks.push({ id: task.id, subject: task.subject, error: error.error });
+            console.error(`Failed to delete task ${task.id}:`, error);
+          }
+        } catch (error) {
+          failedCount++;
+          failedTasks.push({ id: task.id, subject: task.subject, error: 'Network error' });
+          console.error(`Error deleting task ${task.id}:`, error);
+        }
+      }
+
+      // Show result modal
+      showDeleteResultModal(successCount, failedCount, failedTasks);
+
+      // Close detail panel if open
+      closeDetailPanel();
+
+      // Refresh the view
+      await refreshCurrentView();
+    }
+
+    // Topological sort for task deletion order
+    function topologicalSort(tasks) {
+      const result = [];
+      const visited = new Set();
+      const visiting = new Set();
+      const taskMap = new Map(tasks.map(t => [t.id, t]));
+
+      function visit(taskId) {
+        if (visited.has(taskId)) return;
+        if (visiting.has(taskId)) return; // Cycle - skip
+
+        visiting.add(taskId);
+        const task = taskMap.get(taskId);
+
+        if (task && task.blocks && task.blocks.length > 0) {
+          // Visit all tasks that this task blocks (dependencies first)
+          for (const blockedId of task.blocks) {
+            if (taskMap.has(blockedId)) {
+              visit(blockedId);
+            }
+          }
+        }
+
+        visiting.delete(taskId);
+        visited.add(taskId);
+        if (task) result.push(task);
+      }
+
+      // Visit all tasks
+      for (const task of tasks) {
+        visit(task.id);
+      }
+
+      return result;
+    }
+
+    function showDeleteResultModal(successCount, failedCount, failedTasks) {
+      const modal = document.getElementById('delete-result-modal');
+      const messageEl = document.getElementById('delete-result-message');
+      const detailsEl = document.getElementById('delete-result-details');
+
+      if (failedCount === 0) {
+        messageEl.textContent = `Successfully deleted all ${successCount} task(s).`;
+        detailsEl.style.display = 'none';
+      } else {
+        messageEl.textContent = `Deleted ${successCount} task(s). Failed to delete ${failedCount} task(s).`;
+
+        const failedList = failedTasks.map(t =>
+          `<li><strong>${escapeHtml(t.subject)}</strong> (#${escapeHtml(t.id)}): ${escapeHtml(t.error)}</li>`
+        ).join('');
+        detailsEl.innerHTML = `<ul style="margin: 8px 0 0 0; padding-left: 20px;">${failedList}</ul>`;
+        detailsEl.style.display = 'block';
+      }
+
+      modal.classList.add('visible');
+
+      // Handle ESC key
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeDeleteResultModal();
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+      document.addEventListener('keydown', keyHandler);
+    }
+
+    function closeDeleteResultModal() {
+      const modal = document.getElementById('delete-result-modal');
+      modal.classList.remove('visible');
+    }
+
+    function fuzzyMatch(text, query) {
+      if (!query) return true;
+      if (!text) return false;
+
+      text = text.toLowerCase();
+      query = query.toLowerCase();
+
+      // Prioritize exact substring match
+      if (text.includes(query)) return true;
+
+      // Split by common delimiters to search in individual words
+      const words = text.split(/[\s\-_\/\.]+/);
+
+      // Check if query matches start of any word
+      for (const word of words) {
+        if (word.startsWith(query)) return true;
+      }
+
+      // Check if any word contains the query
+      for (const word of words) {
+        if (word.includes(query)) return true;
+      }
+
+      return false;
     }
 
     async function fetchLiveUpdates() {
@@ -1175,11 +1716,24 @@
       try {
         viewMode = 'session';
         const res = await fetch(`/api/sessions/${sessionId}`);
-        currentTasks = await res.json();
+
+        if (res.ok) {
+          currentTasks = await res.json();
+        } else if (res.status === 404) {
+          // Session has no tasks directory yet - start with empty task list
+          currentTasks = [];
+        } else {
+          throw new Error(`Failed to fetch tasks: ${res.status}`);
+        }
+
         currentSessionId = sessionId;
         renderSession();
       } catch (error) {
         console.error('Failed to fetch tasks:', error);
+        // Clear tasks on error to avoid showing stale data
+        currentTasks = [];
+        currentSessionId = sessionId;
+        renderSession();
       }
     }
 
@@ -1231,10 +1785,37 @@
         filteredSessions = filteredSessions.filter(s => s.project === filterProject);
       }
 
+      // Apply search filter
+      if (searchQuery) {
+        filteredSessions = filteredSessions.filter(session => {
+          // Search in session name and ID
+          if (session.name && fuzzyMatch(session.name, searchQuery)) return true;
+          if (session.id && fuzzyMatch(session.id, searchQuery)) return true;
+
+          // Search in project path
+          if (session.project && fuzzyMatch(session.project, searchQuery)) return true;
+
+          // Search in description
+          if (session.description && fuzzyMatch(session.description, searchQuery)) return true;
+
+          // Search in tasks for this session
+          const sessionTasks = allTasksCache.filter(t => t.sessionId === session.id);
+          return sessionTasks.some(task =>
+            (task.subject && fuzzyMatch(task.subject, searchQuery)) ||
+            (task.description && fuzzyMatch(task.description, searchQuery)) ||
+            (task.activeForm && fuzzyMatch(task.activeForm, searchQuery))
+          );
+        });
+      }
+
       if (filteredSessions.length === 0) {
         let emptyMsg = 'No sessions found';
         let emptyHint = 'Tasks appear when you use Claude Code';
-        if (filterProject && sessionFilter === 'active') {
+
+        if (searchQuery) {
+          emptyMsg = `No results for "${searchQuery}"`;
+          emptyHint = 'Try a different search term or clear the search';
+        } else if (filterProject && sessionFilter === 'active') {
           emptyMsg = 'No active sessions for this project';
           emptyHint = 'Try "All Sessions" or "All Projects"';
         } else if (filterProject) {
@@ -1263,14 +1844,27 @@
         const primaryName = projectName || sessionName;
         const secondaryName = projectName ? sessionName : null;
 
+        // Format git branch for display
+        const gitBranch = session.gitBranch ? escapeHtml(session.gitBranch) : null;
+
+        // Format timestamps for display
+        const createdDisplay = session.createdAt ? formatDate(session.createdAt) : '';
+        const modifiedDisplay = formatDate(session.modifiedAt);
+        const timeDisplay = session.createdAt && createdDisplay !== modifiedDisplay
+          ? `Created ${createdDisplay} · Modified ${modifiedDisplay}`
+          : modifiedDisplay;
+
+        // Build tooltip
+        const tooltip = [timeDisplay, gitBranch ? `Branch: ${gitBranch}` : ''].filter(Boolean).join(' | ');
+
         return `
-          <button onclick="fetchTasks('${session.id}')" class="session-item ${isActive ? 'active' : ''}">
+          <button onclick="fetchTasks('${session.id}')" class="session-item ${isActive ? 'active' : ''}" title="${tooltip}">
             <div class="session-name">
               <span>${escapeHtml(primaryName)}</span>
               ${hasInProgress ? '<span class="pulse"></span>' : ''}
             </div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
-            ${session.gitBranch ? `<div class="session-branch">${escapeHtml(session.gitBranch)}</div>` : ''}
+            ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
             <div class="session-progress">
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
               <span class="progress-text">${session.completed}/${total}</span>
@@ -1289,10 +1883,31 @@
       if (!session) return;
 
       const displayName = session.name || currentSessionId;
-      sessionTitle.textContent = displayName;
+
+      // Create header with delete button
+      sessionTitle.innerHTML = `
+        <span style="flex: 1;">${escapeHtml(displayName)}</span>
+        <button class="icon-btn icon-btn-danger" onclick="deleteAllSessionTasks('${session.id}')" title="Delete all tasks in this session">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      `;
+
+      // Build meta text with project path, branch, and description
       const projectName = session.project ? session.project.split('/').pop() : null;
-      const branchInfo = session.gitBranch ? ` · ${session.gitBranch}` : '';
-      sessionMeta.textContent = `${currentTasks.length} tasks${projectName ? ' · ' + projectName : ''}${branchInfo} · ${formatDate(session.modifiedAt)}`;
+      const metaParts = [`${currentTasks.length} tasks`];
+      if (projectName) {
+        metaParts.push(projectName);
+      }
+      if (session.gitBranch) {
+        metaParts.push(session.gitBranch);
+      }
+      if (session.description) {
+        metaParts.push(session.description);
+      }
+      metaParts.push(formatDate(session.modifiedAt));
+      sessionMeta.textContent = metaParts.join(' · ');
 
       const completed = currentTasks.filter(t => t.status === 'completed').length;
       const percent = currentTasks.length > 0 ? Math.round((completed / currentTasks.length) * 100) : 0;
@@ -1309,9 +1924,12 @@
       const taskId = viewMode === 'all' ? `${task.sessionId?.slice(0,4)}-${task.id}` : task.id;
       const sessionLabel = viewMode === 'all' && task.sessionName ? task.sessionName : null;
       const statusClass = task.status.replace('_', '-');
+      const actualSessionId = task.sessionId || currentSessionId;
 
       return `
-        <div onclick="showTaskDetail('${task.id}', '${task.sessionId || ''}')" class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}">
+        <div
+          onclick="showTaskDetail('${task.id}', '${actualSessionId}')"
+          class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}">
           <div class="task-id">
             <span>#${taskId}</span>
             ${isBlocked ? '<span class="task-badge blocked">Blocked</span>' : ''}
@@ -1347,8 +1965,57 @@
         : '<div class="column-empty">No completed tasks</div>';
     }
 
-    function showTaskDetail(taskId, sessionId = null) {
-      const task = currentTasks.find(t => t.id === taskId && (!sessionId || t.sessionId === sessionId));
+    function getAvailableTasksOptions(currentTaskId = null) {
+      const pending = currentTasks.filter(t => t.status === 'pending' && t.id !== currentTaskId);
+      const inProgress = currentTasks.filter(t => t.status === 'in_progress' && t.id !== currentTaskId);
+      const completed = currentTasks.filter(t => t.status === 'completed' && t.id !== currentTaskId);
+
+      // Build options grouped by status
+      let options = '';
+
+      if (pending.length > 0) {
+        options += '<optgroup label="Pending">';
+        pending.forEach((t, idx) => {
+          options += `<option value="${t.id}">#${t.id} - ${escapeHtml(t.subject)}</option>`;
+        });
+        options += '</optgroup>';
+      }
+
+      if (inProgress.length > 0) {
+        options += '<optgroup label="In Progress">';
+        inProgress.forEach((t, idx) => {
+          options += `<option value="${t.id}">#${t.id} - ${escapeHtml(t.subject)}</option>`;
+        });
+        options += '</optgroup>';
+      }
+
+      if (completed.length > 0) {
+        options += '<optgroup label="Completed">';
+        completed.forEach((t, idx) => {
+          options += `<option value="${t.id}">#${t.id} - ${escapeHtml(t.subject)}</option>`;
+        });
+        options += '</optgroup>';
+      }
+
+      return options;
+    }
+
+    async function showTaskDetail(taskId, sessionId = null) {
+      let task = currentTasks.find(t => t.id === taskId && (!sessionId || t.sessionId === sessionId));
+
+      // If task not found in currentTasks, fetch it from the session
+      if (!task && sessionId && sessionId !== 'undefined') {
+        try {
+          const res = await fetch(`/api/sessions/${sessionId}`);
+          const tasks = await res.json();
+          task = tasks.find(t => t.id === taskId);
+          if (!task) return;
+        } catch (error) {
+          console.error('Failed to fetch task:', error);
+          return;
+        }
+      }
+
       if (!task) return;
 
       detailPanel.classList.add('visible');
@@ -1359,14 +2026,33 @@
         pending: '<span class="detail-status pending"><span class="dot"></span>Pending</span>'
       };
 
+      const isBlocked = task.blockedBy && task.blockedBy.length > 0;
+      const actualSessionId = task.sessionId || sessionId || currentSessionId;
+
       detailContent.innerHTML = `
         <div class="detail-section">
-          <div class="detail-label">Task #${task.id}</div>
-          <h2 class="detail-title">${escapeHtml(task.subject)}</h2>
+          <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="flex: 1;">
+              <div class="detail-label">Task #${task.id}</div>
+              <h2 class="detail-title">${escapeHtml(task.subject)}</h2>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="delete-task-btn" class="icon-btn" title="Delete task (D)" style="color: #ef4444; border-color: #ef4444;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="detail-section">
-          ${statusLabels[task.status] || statusLabels.pending}
+          <div class="detail-label">Status</div>
+          <div style="font-size: 14px; color: var(--text-primary); padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px; display: inline-block;">
+            ${task.status === 'pending' ? 'Pending' : task.status === 'in_progress' ? 'In Progress' : 'Completed'}
+          </div>
+          ${isBlocked && task.status !== 'in_progress' ? '<div style="font-size: 10px; color: var(--warning); margin-top: 4px;">Blocked by dependencies</div>' : ''}
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Status is controlled by Claude Code</div>
         </div>
 
         ${task.activeForm && task.status === 'in_progress' ? `
@@ -1377,37 +2063,40 @@
           </div>
         ` : ''}
 
-        ${task.blockedBy && task.blockedBy.length > 0 ? `
-          <div class="detail-section">
-            <div class="detail-box blocked">
-              <strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}
-            </div>
+        <div class="detail-section">
+          <div class="detail-label">Blocked By</div>
+          <div class="detail-desc">
+            ${task.blockedBy && task.blockedBy.length > 0
+              ? `<div class="detail-box blocked"><strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}</div>`
+              : '<em style="color: var(--text-muted); font-size: 13px;">No dependencies</em>'}
           </div>
-        ` : ''}
+        </div>
 
-        ${task.blocks && task.blocks.length > 0 ? `
-          <div class="detail-section">
-            <div class="detail-box blocks">
-              <strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}
-            </div>
+        <div class="detail-section">
+          <div class="detail-label">Blocks</div>
+          <div class="detail-desc">
+            ${task.blocks && task.blocks.length > 0
+              ? `<div class="detail-box blocks"><strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}</div>`
+              : '<em style="color: var(--text-muted); font-size: 13px;">No tasks blocked</em>'}
           </div>
-        ` : ''}
+        </div>
 
-        ${task.description ? `
-          <div class="detail-section">
-            <div class="detail-label">Description</div>
-            <div class="detail-desc">${DOMPurify.sanitize(marked.parse(task.description))}</div>
-          </div>
-        ` : ''}
+        <div class="detail-section">
+          <div class="detail-label">Description</div>
+          <div class="detail-desc">${task.description ? DOMPurify.sanitize(marked.parse(task.description)) : '<em style="color: var(--text-muted);">No description</em>'}</div>
+        </div>
 
         <div class="detail-section note-section">
           <div class="detail-label">Add Note</div>
-          <form class="note-form" onsubmit="addNote(event, '${task.id}', '${task.sessionId || currentSessionId}')">
+          <form class="note-form" onsubmit="addNote(event, '${task.id}', '${actualSessionId}')">
             <textarea id="note-input" class="note-input" placeholder="Add a note for Claude..." rows="3"></textarea>
             <button type="submit" class="note-submit">Add Note</button>
           </form>
         </div>
       `;
+
+      // Setup button handlers
+      document.getElementById('delete-task-btn').onclick = () => deleteTask(task.id, actualSessionId);
     }
 
     async function addNote(event, taskId, sessionId) {
@@ -1443,11 +2132,169 @@
       detailPanel.classList.remove('visible');
     }
 
+    let deleteTaskId = null;
+    let deleteSessionId = null;
+
+    function showBlockedTaskModal(task) {
+      const messageDiv = document.getElementById('blocked-task-message');
+
+      const blockedByList = task.blockedBy.map(id => {
+        const blockingTask = currentTasks.find(t => t.id === id);
+        if (blockingTask) {
+          return `<li><strong>#${blockingTask.id}</strong> - ${escapeHtml(blockingTask.subject)}</li>`;
+        }
+        return `<li><strong>#${id}</strong></li>`;
+      }).join('');
+
+      messageDiv.innerHTML = `
+        <p style="margin-bottom: 12px;">Task <strong>#${task.id}</strong> - ${escapeHtml(task.subject)} is currently blocked by:</p>
+        <ul style="margin: 0 0 16px 20px; padding: 0;">${blockedByList}</ul>
+        <p style="margin: 0; color: var(--text-secondary); font-size: 13px;">
+          Please resolve these dependencies before moving this task to <strong>In Progress</strong>.
+        </p>
+      `;
+
+      const modal = document.getElementById('blocked-task-modal');
+      modal.classList.add('visible');
+
+      // Handle ESC key
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeBlockedTaskModal();
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+      document.addEventListener('keydown', keyHandler);
+    }
+
+    function closeBlockedTaskModal() {
+      const modal = document.getElementById('blocked-task-modal');
+      modal.classList.remove('visible');
+    }
+
+    function deleteTask(taskId, sessionId) {
+      const task = currentTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      deleteTaskId = taskId;
+      deleteSessionId = sessionId;
+
+      const message = document.getElementById('delete-confirm-message');
+      message.textContent = `Delete task "${task.subject}"? This cannot be undone.`;
+
+      const modal = document.getElementById('delete-confirm-modal');
+      modal.classList.add('visible');
+
+      // Handle ESC key
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeDeleteConfirmModal();
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+      document.addEventListener('keydown', keyHandler);
+    }
+
+    function closeDeleteConfirmModal() {
+      const modal = document.getElementById('delete-confirm-modal');
+      modal.classList.remove('visible');
+      deleteTaskId = null;
+      deleteSessionId = null;
+    }
+
+    async function confirmDelete() {
+      if (!deleteTaskId || !deleteSessionId) return;
+
+      const taskId = deleteTaskId;
+      const sessionId = deleteSessionId;
+
+      closeDeleteConfirmModal();
+
+      try {
+        const res = await fetch(`/api/tasks/${sessionId}/${taskId}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          closeDetailPanel();
+          await refreshCurrentView();
+        } else {
+          const error = await res.json();
+          alert('Failed to delete task: ' + (error.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Failed to delete task:', error);
+        alert('Failed to delete task');
+      }
+    }
+
+    function showHelpModal() {
+      const modal = document.getElementById('help-modal');
+      modal.classList.add('visible');
+
+      // Handle keyboard shortcuts
+      const keyHandler = (e) => {
+        if (e.key === 'Escape' || e.key === '?') {
+          e.preventDefault();
+          closeHelpModal();
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+      document.addEventListener('keydown', keyHandler);
+    }
+
+    function closeHelpModal() {
+      const modal = document.getElementById('help-modal');
+      modal.classList.remove('visible');
+    }
+
+    async function refreshCurrentView() {
+      fetchLiveUpdates();
+      if (viewMode === 'all') {
+        await showAllTasks();
+      } else if (currentSessionId) {
+        await fetchTasks(currentSessionId);
+      } else {
+        await fetchSessions();
+      }
+    }
+
     document.getElementById('close-detail').onclick = closeDetailPanel;
 
     document.addEventListener('keydown', (e) => {
+      // Ignore if typing in input/textarea
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return;
+      }
+
       if (e.key === 'Escape' && detailPanel.classList.contains('visible')) {
         closeDetailPanel();
+      }
+
+      if (detailPanel.classList.contains('visible')) {
+        // Get task ID from detail panel
+        const labelElement = document.querySelector('.detail-label');
+        if (!labelElement) return;
+
+        const taskId = labelElement.textContent.match(/\d+/)?.[0];
+        if (!taskId) return;
+
+        const task = currentTasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const sessionId = task.sessionId || currentSessionId;
+
+        if (e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          deleteTask(taskId, sessionId);
+        }
+      }
+
+      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        showHelpModal();
       }
     });
 
@@ -1478,9 +2325,16 @@
 
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
+          console.log('[SSE] Event received:', data);
           if (data.type === 'update' || data.type === 'metadata-update') {
-            fetchSessions();
-            if (currentSessionId && data.sessionId === currentSessionId) {
+            console.log('[SSE] Calling fetchSessions()...');
+            fetchSessions().catch(err => {
+              console.error('[SSE] fetchSessions failed:', err);
+            });
+
+            // For metadata-update or matching sessionId, refresh current session view
+            if (currentSessionId && (data.type === 'metadata-update' || data.sessionId === currentSessionId)) {
+              console.log('[SSE] Refreshing current session view:', currentSessionId);
               fetchTasks(currentSessionId);
             }
           }
@@ -1511,6 +2365,12 @@
       sessionFilter = value;
       localStorage.setItem('sessionFilter', sessionFilter);
       renderSessions();
+    }
+
+    function changeSessionLimit(value) {
+      sessionLimit = value;
+      localStorage.setItem('sessionLimit', sessionLimit);
+      fetchSessions();
     }
 
     function filterByProject(project) {
@@ -1549,14 +2409,157 @@
 
     function loadPreferences() {
       document.getElementById('session-filter').value = sessionFilter;
+      document.getElementById('session-limit').value = sessionLimit;
     }
 
     // Init
     loadTheme();
     loadPreferences();
-    fetchSessions();
     setupEventSource();
-    setTimeout(showAllTasks, 500);
+
+    // Fetch sessions and show newest one by default
+    fetchSessions().then(() => {
+      if (sessions.length > 0) {
+        // Sessions are already sorted by newest first from API
+        fetchTasks(sessions[0].id);
+      } else {
+        showAllTasks();
+      }
+    });
   </script>
+
+  <!-- Help Modal -->
+  <div id="help-modal" class="modal-overlay" onclick="closeHelpModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">Keyboard Shortcuts</h3>
+        <button class="modal-close" onclick="closeHelpModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="display: grid; gap: 16px;">
+          <div>
+            <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Global</h4>
+            <table style="width: 100%; font-size: 13px;">
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">?</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Show keyboard shortcuts</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Esc</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Close panels or cancel</td>
+              </tr>
+            </table>
+          </div>
+          <div>
+            <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Task Actions</h4>
+            <table style="width: 100%; font-size: 13px;">
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">D</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Delete selected task</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeHelpModal()">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-confirm-modal" class="modal-overlay" onclick="closeDeleteConfirmModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Delete Task</h3>
+        <button class="modal-close" onclick="closeDeleteConfirmModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="delete-confirm-message" style="margin: 0; color: var(--text-primary);"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDeleteConfirmModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmDelete()" style="background: #ef4444; border-color: #ef4444;">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete All Session Tasks Confirmation Modal -->
+  <div id="delete-session-tasks-modal" class="modal-overlay" onclick="closeDeleteSessionTasksModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Delete All Tasks</h3>
+        <button class="modal-close" onclick="closeDeleteSessionTasksModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="delete-session-tasks-message" style="margin: 0 0 12px 0; color: var(--text-primary);"></p>
+        <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDeleteSessionTasksModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmDeleteSessionTasks()" style="background: #ef4444; border-color: #ef4444;">Delete All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Result Modal -->
+  <div id="delete-result-modal" class="modal-overlay" onclick="closeDeleteResultModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Deletion Result</h3>
+        <button class="modal-close" onclick="closeDeleteResultModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="delete-result-message" style="margin: 0; color: var(--text-primary);"></p>
+        <div id="delete-result-details" style="margin-top: 12px; font-size: 13px; color: var(--text-secondary);"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeDeleteResultModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blocked Task Warning Modal -->
+  <div id="blocked-task-modal" class="modal-overlay" onclick="closeBlockedTaskModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" style="width: 20px; height: 20px;">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+          Cannot Start Blocked Task
+        </h3>
+        <button class="modal-close" onclick="closeBlockedTaskModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="blocked-task-message" style="color: var(--text-primary); line-height: 1.6;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeBlockedTaskModal()">OK</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
