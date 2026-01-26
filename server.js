@@ -249,37 +249,6 @@ app.get('/api/sessions', async (req, res) => {
       }
     }
 
-    // Then, add sessions from metadata that don't have task directories yet
-    for (const [sessionId, meta] of Object.entries(metadata)) {
-      if (!sessionsMap.has(sessionId)) {
-        // Get modified time from JSONL file
-        let modifiedAt = new Date(0).toISOString(); // Fallback
-        if (meta.jsonlPath && existsSync(meta.jsonlPath)) {
-          try {
-            const stat = statSync(meta.jsonlPath);
-            modifiedAt = stat.mtime.toISOString();
-          } catch (e) {
-            // Use fallback
-          }
-        }
-
-        sessionsMap.set(sessionId, {
-          id: sessionId,
-          name: getSessionDisplayName(sessionId, meta),
-          slug: meta.slug || null,
-          project: meta.project || null,
-          description: meta.description || null,
-          gitBranch: meta.gitBranch || null,
-          taskCount: 0,
-          completed: 0,
-          inProgress: 0,
-          pending: 0,
-          createdAt: meta.created || null,
-          modifiedAt: modifiedAt
-        });
-      }
-    }
-
     // Convert map to array and sort by most recently modified
     let sessions = Array.from(sessionsMap.values());
     sessions.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
@@ -397,40 +366,6 @@ app.post('/api/tasks/:sessionId/:taskId/note', async (req, res) => {
   } catch (error) {
     console.error('Error adding note:', error);
     res.status(500).json({ error: 'Failed to add note' });
-  }
-});
-
-// API: Update a task
-app.patch('/api/tasks/:sessionId/:taskId', async (req, res) => {
-  try {
-    const { sessionId, taskId } = req.params;
-    const updates = req.body;
-
-    const taskPath = path.join(TASKS_DIR, sessionId, `${taskId}.json`);
-
-    if (!existsSync(taskPath)) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    // Read current task
-    const task = JSON.parse(await fs.readFile(taskPath, 'utf8'));
-
-    // Apply updates (only allow order changes for reordering)
-    // Task content (subject, description, status) is controlled by Claude Code, not the UI
-    const allowedFields = ['order'];
-    for (const field of allowedFields) {
-      if (updates[field] !== undefined) {
-        task[field] = updates[field];
-      }
-    }
-
-    // Write updated task
-    await fs.writeFile(taskPath, JSON.stringify(task, null, 2));
-
-    res.json({ success: true, task });
-  } catch (error) {
-    console.error('Error updating task:', error);
-    res.status(500).json({ error: 'Failed to update task' });
   }
 });
 

@@ -316,24 +316,6 @@
       box-shadow: 0 0 12px var(--accent-glow);
     }
 
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-left: 2px;
-    }
-
-    .status-active {
-      background: #10b981;
-      box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-    }
-
-    .status-inactive {
-      background: #f59e0b;
-      opacity: 0.6;
-    }
-
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.6; transform: scale(0.9); }
@@ -646,7 +628,7 @@
       background: var(--bg-surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      cursor: grab;
+      cursor: pointer;
       transition: all 0.15s ease;
     }
 
@@ -654,24 +636,6 @@
       background: var(--bg-elevated);
       border-color: var(--text-muted);
       transform: translateY(-1px);
-    }
-
-    .task-card:active {
-      cursor: grabbing;
-    }
-
-    .task-card.dragging {
-      opacity: 0.5;
-      transform: rotate(2deg);
-      cursor: grabbing;
-    }
-
-    .column-tasks.drag-over {
-      background: var(--accent-dim);
-      border: 2px dashed var(--accent);
-      border-radius: 8px;
-      padding: 4px;
-      margin: -4px;
     }
 
     .task-card.in-progress {
@@ -1318,7 +1282,8 @@
       <!-- Tasks -->
       <div class="sidebar-section flex-1">
         <div class="section-header">
-          <span>Tasks</span>
+          <span>Sessions</span>
+          <button onclick="showAllTasks()" style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 10px; color: var(--text-secondary); cursor: pointer; font-family: var(--mono);">All Tasks</button>
         </div>
         <div class="search-container">
           <input
@@ -1882,14 +1847,6 @@
         // Format git branch for display
         const gitBranch = session.gitBranch ? escapeHtml(session.gitBranch) : null;
 
-        // Determine session status (active = modified within 1 hour OR has in-progress tasks)
-        const modifiedTime = new Date(session.modifiedAt);
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const isRecentlyActive = modifiedTime > oneHourAgo || hasInProgress;
-        const statusDot = isRecentlyActive
-          ? '<span class="status-dot status-active" title="Active (modified within 1 hour)"></span>'
-          : '<span class="status-dot status-inactive" title="Inactive"></span>';
-
         // Format timestamps for display
         const createdDisplay = session.createdAt ? formatDate(session.createdAt) : '';
         const modifiedDisplay = formatDate(session.modifiedAt);
@@ -1904,7 +1861,6 @@
           <button onclick="fetchTasks('${session.id}')" class="session-item ${isActive ? 'active' : ''}" title="${tooltip}">
             <div class="session-name">
               <span>${escapeHtml(primaryName)}</span>
-              ${statusDot}
               ${hasInProgress ? '<span class="pulse"></span>' : ''}
             </div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
@@ -1963,7 +1919,7 @@
       renderSessions();
     }
 
-    function renderTaskCard(task, position) {
+    function renderTaskCard(task) {
       const isBlocked = task.blockedBy && task.blockedBy.length > 0;
       const taskId = viewMode === 'all' ? `${task.sessionId?.slice(0,4)}-${task.id}` : task.id;
       const sessionLabel = viewMode === 'all' && task.sessionName ? task.sessionName : null;
@@ -1972,16 +1928,9 @@
 
       return `
         <div
-          draggable="true"
-          data-task-id="${task.id}"
-          data-session-id="${actualSessionId}"
-          data-current-status="${task.status}"
-          data-is-blocked="${isBlocked}"
-          data-position="${position}"
           onclick="showTaskDetail('${task.id}', '${actualSessionId}')"
           class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}">
           <div class="task-id">
-            <span style="font-weight: 600; color: var(--accent);">${position}.</span>
             <span>#${taskId}</span>
             ${isBlocked ? '<span class="task-badge blocked">Blocked</span>' : ''}
           </div>
@@ -1995,378 +1944,31 @@
     }
 
     function renderKanban() {
-      // Sort by order (or by task ID if order doesn't exist)
-      const sortByOrder = (tasks) => {
-        return tasks.sort((a, b) => {
-          const orderA = a.order !== undefined ? a.order : parseInt(a.id);
-          const orderB = b.order !== undefined ? b.order : parseInt(b.id);
-          return orderA - orderB;
-        });
-      };
-
-      const pending = sortByOrder(currentTasks.filter(t => t.status === 'pending'));
-      const inProgress = sortByOrder(currentTasks.filter(t => t.status === 'in_progress'));
-      const completed = sortByOrder(currentTasks.filter(t => t.status === 'completed'));
+      const pending = currentTasks.filter(t => t.status === 'pending');
+      const inProgress = currentTasks.filter(t => t.status === 'in_progress');
+      const completed = currentTasks.filter(t => t.status === 'completed');
 
       pendingCount.textContent = pending.length;
       inProgressCount.textContent = inProgress.length;
       completedCount.textContent = completed.length;
 
       pendingTasks.innerHTML = pending.length > 0
-        ? pending.map((task, index) => renderTaskCard(task, index + 1)).join('')
+        ? pending.map(renderTaskCard).join('')
         : '<div class="column-empty">No pending tasks</div>';
 
       inProgressTasks.innerHTML = inProgress.length > 0
-        ? inProgress.map((task, index) => renderTaskCard(task, index + 1)).join('')
+        ? inProgress.map(renderTaskCard).join('')
         : '<div class="column-empty">No active tasks</div>';
 
       completedTasks.innerHTML = completed.length > 0
-        ? completed.map((task, index) => renderTaskCard(task, index + 1)).join('')
+        ? completed.map(renderTaskCard).join('')
         : '<div class="column-empty">No completed tasks</div>';
-
-      // Setup drag and drop
-      setupDragAndDrop();
-    }
-
-    function setupDragAndDrop() {
-      const taskCards = document.querySelectorAll('.task-card');
-      const dropZones = document.querySelectorAll('.column-tasks');
-
-      // Setup drag events on task cards
-      taskCards.forEach(card => {
-        card.addEventListener('dragstart', handleDragStart);
-        card.addEventListener('dragend', handleDragEnd);
-      });
-
-      // Setup drop zones
-      dropZones.forEach(zone => {
-        zone.addEventListener('dragover', handleDragOver);
-        zone.addEventListener('dragleave', handleDragLeave);
-        zone.addEventListener('drop', handleDrop);
-      });
-    }
-
-    let draggedElement = null;
-    let isDragging = false;
-
-    function handleDragStart(e) {
-      isDragging = true;
-      draggedElement = e.currentTarget;
-      draggedElement.classList.add('dragging');
-
-      // Set drag data
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/html', draggedElement.innerHTML);
-
-      // Prevent click event from firing
-      setTimeout(() => {
-        draggedElement.style.opacity = '0.5';
-      }, 0);
-    }
-
-    function handleDragEnd(e) {
-      e.currentTarget.classList.remove('dragging');
-      e.currentTarget.style.opacity = '';
-      draggedElement = null;
-
-      // Remove drag-over class from all zones
-      document.querySelectorAll('.column-tasks').forEach(zone => {
-        zone.classList.remove('drag-over');
-      });
-
-      // Reset drag flag after a short delay to prevent click event
-      setTimeout(() => {
-        isDragging = false;
-      }, 100);
-    }
-
-    function handleDragOver(e) {
-      if (!draggedElement) return;
-
-      const dropZone = e.currentTarget;
-      const currentStatus = draggedElement.dataset.currentStatus;
-
-      // Determine target status from drop zone
-      let targetStatus = 'pending';
-      if (dropZone.id === 'in-progress-tasks') {
-        targetStatus = 'in_progress';
-      } else if (dropZone.id === 'completed-tasks') {
-        targetStatus = 'completed';
-      }
-
-      // Only allow dragging within the same column
-      if (currentStatus !== targetStatus) {
-        e.dataTransfer.dropEffect = 'none';
-        return;
-      }
-
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-
-      if (!dropZone.classList.contains('drag-over')) {
-        dropZone.classList.add('drag-over');
-      }
-    }
-
-    function handleDragLeave(e) {
-      const dropZone = e.currentTarget;
-
-      // Only remove if we're leaving the drop zone itself, not a child
-      if (e.target === dropZone) {
-        dropZone.classList.remove('drag-over');
-      }
-    }
-
-    async function handleDrop(e) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const dropZone = e.currentTarget;
-      dropZone.classList.remove('drag-over');
-
-      if (!draggedElement) return;
-
-      // Get task info from dragged element
-      const taskId = draggedElement.dataset.taskId;
-      const sessionId = draggedElement.dataset.sessionId;
-      const currentStatus = draggedElement.dataset.currentStatus;
-
-      // Determine new status from drop zone
-      let newStatus = 'pending';
-      if (dropZone.id === 'in-progress-tasks') {
-        newStatus = 'in_progress';
-      } else if (dropZone.id === 'completed-tasks') {
-        newStatus = 'completed';
-      }
-
-      // Only allow reordering within the same column
-      // Task status changes are controlled by Claude Code, not the UI
-      if (currentStatus !== newStatus) {
-        return; // Silently reject cross-column drops
-      }
-
-      // Handle reordering within the column
-      await handleReorder(e, dropZone, taskId, sessionId, newStatus);
-    }
-
-    async function handleReorder(e, dropZone, draggedTaskId, sessionId, status) {
-      // Get all task cards in this column (excluding the dragged one)
-      const taskCards = Array.from(dropZone.querySelectorAll('.task-card:not(.dragging)'));
-
-      // Find the drop position by checking mouse position against card boundaries
-      let dropIndex = taskCards.length; // Default to end
-
-      for (let i = 0; i < taskCards.length; i++) {
-        const card = taskCards[i];
-        const rect = card.getBoundingClientRect();
-        const midpoint = rect.top + rect.height / 2;
-
-        if (e.clientY < midpoint) {
-          dropIndex = i;
-          break;
-        }
-      }
-
-      // Get all tasks in this status, sorted by current order
-      const tasksInStatus = currentTasks.filter(t => t.status === status);
-      const sortedTasks = tasksInStatus.sort((a, b) => {
-        const orderA = a.order !== undefined ? a.order : parseInt(a.id);
-        const orderB = b.order !== undefined ? b.order : parseInt(b.id);
-        return orderA - orderB;
-      });
-
-      // Find the dragged task
-      const draggedTask = sortedTasks.find(t => t.id === draggedTaskId);
-      if (!draggedTask) return;
-
-      // Remove dragged task from array
-      const currentIndex = sortedTasks.indexOf(draggedTask);
-      sortedTasks.splice(currentIndex, 1);
-
-      // Insert at new position
-      sortedTasks.splice(dropIndex, 0, draggedTask);
-
-      // Validate: Check if reorder creates dependency conflicts
-      const conflicts = [];
-      const seenPairs = new Set(); // Track task pairs to avoid duplicates
-
-      // Case 1: Task is being moved BEFORE its dependencies (blockedBy)
-      if (draggedTask.blockedBy && draggedTask.blockedBy.length > 0) {
-        for (const depId of draggedTask.blockedBy) {
-          const depTask = sortedTasks.find(t => t.id === depId);
-          if (!depTask) continue; // Dependency not in this column
-
-          const draggedNewIndex = sortedTasks.indexOf(draggedTask);
-          const depIndex = sortedTasks.indexOf(depTask);
-
-          // If dragged task comes before its dependency, that's a conflict
-          if (draggedNewIndex < depIndex) {
-            const pairKey = `${draggedTask.id}-${depTask.id}`;
-            if (!seenPairs.has(pairKey)) {
-              seenPairs.add(pairKey);
-              conflicts.push({
-                type: 'blockedBy',
-                task: depTask
-              });
-            }
-          }
-        }
-      }
-
-      // Case 2: Task is being moved AFTER tasks it blocks
-      if (draggedTask.blocks && draggedTask.blocks.length > 0) {
-        for (const blockedId of draggedTask.blocks) {
-          const blockedTask = sortedTasks.find(t => t.id === blockedId);
-          if (!blockedTask) continue; // Blocked task not in this column
-
-          const draggedNewIndex = sortedTasks.indexOf(draggedTask);
-          const blockedIndex = sortedTasks.indexOf(blockedTask);
-
-          // If dragged task comes after task it blocks, that's a conflict
-          if (draggedNewIndex > blockedIndex) {
-            const pairKey = `${draggedTask.id}-${blockedTask.id}`;
-            if (!seenPairs.has(pairKey)) {
-              seenPairs.add(pairKey);
-              conflicts.push({
-                type: 'blocks',
-                task: blockedTask
-              });
-            }
-          }
-        }
-      }
-
-      // Case 3: Other tasks depend on this task (have it in their blockedBy), and would now come BEFORE it
-      for (const task of sortedTasks) {
-        if (task.id === draggedTask.id) continue; // Skip self
-        if (!task.blockedBy || task.blockedBy.length === 0) continue;
-
-        // Does this task depend on the dragged task?
-        if (task.blockedBy.includes(draggedTask.id)) {
-          const draggedNewIndex = sortedTasks.indexOf(draggedTask);
-          const dependentIndex = sortedTasks.indexOf(task);
-
-          // If dependent task comes BEFORE the dragged task, that's a conflict
-          if (dependentIndex < draggedNewIndex) {
-            const pairKey = `${draggedTask.id}-${task.id}`;
-            if (!seenPairs.has(pairKey)) {
-              seenPairs.add(pairKey);
-              conflicts.push({
-                type: 'dependsOn',
-                task: task
-              });
-            }
-          }
-        }
-      }
-
-      // Case 4: Other tasks block this task (have it in their blocks), and dragged task would now come BEFORE them
-      for (const task of sortedTasks) {
-        if (task.id === draggedTask.id) continue; // Skip self
-        if (!task.blocks || task.blocks.length === 0) continue;
-
-        // Does this task block the dragged task?
-        if (task.blocks.includes(draggedTask.id)) {
-          const draggedNewIndex = sortedTasks.indexOf(draggedTask);
-          const blockerIndex = sortedTasks.indexOf(task);
-
-          // If dragged task comes BEFORE the task that blocks it, that's a conflict
-          if (draggedNewIndex < blockerIndex) {
-            const pairKey = `${draggedTask.id}-${task.id}`;
-            if (!seenPairs.has(pairKey)) {
-              seenPairs.add(pairKey);
-              conflicts.push({
-                type: 'blockedByOther',
-                task: task
-              });
-            }
-          }
-        }
-      }
-
-      // If conflicts exist, show warning and ask for confirmation
-      if (conflicts.length > 0) {
-        const blockedByConflicts = conflicts.filter(c => c.type === 'blockedBy');
-        const blocksConflicts = conflicts.filter(c => c.type === 'blocks');
-        const dependsOnConflicts = conflicts.filter(c => c.type === 'dependsOn');
-        const blockedByOtherConflicts = conflicts.filter(c => c.type === 'blockedByOther');
-
-        let message = '';
-
-        if (blockedByConflicts.length > 0) {
-          const list = blockedByConflicts.map(c => `<li><strong>#${c.task.id}</strong> - ${escapeHtml(c.task.subject)}</li>`).join('');
-          message += `<p style="margin-bottom: 12px;">Task <strong>#${draggedTask.id}</strong> is blocked by:</p>
-                      <ul style="margin: 0 0 12px 20px; padding: 0;">${list}</ul>
-                      <p style="margin-bottom: 16px; color: var(--text-secondary);">But you're moving it to position <strong>${dropIndex + 1}</strong>, <span style="color: #f59e0b;">BEFORE</span> its dependencies.</p>`;
-        }
-
-        if (blocksConflicts.length > 0) {
-          const list = blocksConflicts.map(c => `<li><strong>#${c.task.id}</strong> - ${escapeHtml(c.task.subject)}</li>`).join('');
-          message += `<p style="margin-bottom: 12px;">Task <strong>#${draggedTask.id}</strong> blocks:</p>
-                      <ul style="margin: 0 0 12px 20px; padding: 0;">${list}</ul>
-                      <p style="margin-bottom: 16px; color: var(--text-secondary);">But you're moving it to position <strong>${dropIndex + 1}</strong>, <span style="color: #f59e0b;">AFTER</span> the tasks it should block.</p>`;
-        }
-
-        if (dependsOnConflicts.length > 0) {
-          const list = dependsOnConflicts.map(c => `<li><strong>#${c.task.id}</strong> - ${escapeHtml(c.task.subject)}</li>`).join('');
-          message += `<p style="margin-bottom: 12px;">These tasks depend on task <strong>#${draggedTask.id}</strong>:</p>
-                      <ul style="margin: 0 0 12px 20px; padding: 0;">${list}</ul>
-                      <p style="margin-bottom: 16px; color: var(--text-secondary);">But you're moving it to position <strong>${dropIndex + 1}</strong>, <span style="color: #f59e0b;">AFTER</span> tasks that depend on it.</p>`;
-        }
-
-        if (blockedByOtherConflicts.length > 0) {
-          const list = blockedByOtherConflicts.map(c => `<li><strong>#${c.task.id}</strong> - ${escapeHtml(c.task.subject)}</li>`).join('');
-          message += `<p style="margin-bottom: 12px;">Task <strong>#${draggedTask.id}</strong> is blocked by:</p>
-                      <ul style="margin: 0 0 12px 20px; padding: 0;">${list}</ul>
-                      <p style="margin-bottom: 16px; color: var(--text-secondary);">But you're moving it to position <strong>${dropIndex + 1}</strong>, <span style="color: #f59e0b;">BEFORE</span> tasks that should block it.</p>`;
-        }
-
-        message += `<p style="margin: 0; font-size: 13px; color: var(--text-muted);">This creates a logical conflict. Do you want to continue?</p>`;
-
-        // Show modal and store data for later
-        showDependencyConflictModal(message, { sortedTasks, sessionId });
-        return;
-      }
-
-      // No conflicts - proceed with reorder
-      try {
-        for (let i = 0; i < sortedTasks.length; i++) {
-          const task = sortedTasks[i];
-          const newOrder = i;
-
-          // Only update if order changed
-          const currentOrder = task.order !== undefined ? task.order : parseInt(task.id);
-          if (currentOrder !== newOrder) {
-            const taskSessionId = task.sessionId || sessionId;
-            await fetch(`/api/tasks/${taskSessionId}/${task.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order: newOrder })
-            });
-          }
-        }
-
-        await refreshCurrentView();
-      } catch (error) {
-        console.error('Failed to reorder tasks:', error);
-        alert('Failed to reorder tasks');
-        await refreshCurrentView();
-      }
     }
 
     function getAvailableTasksOptions(currentTaskId = null) {
-      // Get all tasks sorted by status and position
-      const sortByOrder = (tasks) => {
-        return tasks.sort((a, b) => {
-          const orderA = a.order !== undefined ? a.order : parseInt(a.id);
-          const orderB = b.order !== undefined ? b.order : parseInt(b.id);
-          return orderA - orderB;
-        });
-      };
-
-      const pending = sortByOrder(currentTasks.filter(t => t.status === 'pending' && t.id !== currentTaskId));
-      const inProgress = sortByOrder(currentTasks.filter(t => t.status === 'in_progress' && t.id !== currentTaskId));
-      const completed = sortByOrder(currentTasks.filter(t => t.status === 'completed' && t.id !== currentTaskId));
+      const pending = currentTasks.filter(t => t.status === 'pending' && t.id !== currentTaskId);
+      const inProgress = currentTasks.filter(t => t.status === 'in_progress' && t.id !== currentTaskId);
+      const completed = currentTasks.filter(t => t.status === 'completed' && t.id !== currentTaskId);
 
       // Build options grouped by status
       let options = '';
@@ -2399,9 +2001,6 @@
     }
 
     async function showTaskDetail(taskId, sessionId = null) {
-      // Don't open detail panel if we're dragging
-      if (isDragging) return;
-
       let task = currentTasks.find(t => t.id === taskId && (!sessionId || t.sessionId === sessionId));
 
       // If task not found in currentTasks, fetch it from the session
@@ -2536,9 +2135,6 @@
     let deleteTaskId = null;
     let deleteSessionId = null;
 
-    // Dependency conflict modal state
-    let pendingReorderData = null;
-
     function showBlockedTaskModal(task) {
       const messageDiv = document.getElementById('blocked-task-message');
 
@@ -2575,74 +2171,6 @@
     function closeBlockedTaskModal() {
       const modal = document.getElementById('blocked-task-modal');
       modal.classList.remove('visible');
-    }
-
-    function showDependencyConflictModal(message, reorderData) {
-      pendingReorderData = reorderData;
-
-      const messageDiv = document.getElementById('dependency-conflict-message');
-      messageDiv.innerHTML = message;
-
-      const modal = document.getElementById('dependency-conflict-modal');
-      modal.classList.add('visible');
-
-      // Handle ESC key
-      const keyHandler = (e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          closeDependencyConflictModal();
-          document.removeEventListener('keydown', keyHandler);
-        }
-      };
-      document.addEventListener('keydown', keyHandler);
-    }
-
-    function closeDependencyConflictModal(cancelled = true) {
-      const modal = document.getElementById('dependency-conflict-modal');
-      modal.classList.remove('visible');
-
-      // If user cancelled (not confirmed), refresh to restore original order
-      if (cancelled && pendingReorderData) {
-        refreshCurrentView();
-      }
-
-      pendingReorderData = null;
-    }
-
-    async function confirmReorder() {
-      if (!pendingReorderData) return;
-
-      const { sortedTasks, sessionId } = pendingReorderData;
-
-      // Close without refreshing (not cancelled)
-      const modal = document.getElementById('dependency-conflict-modal');
-      modal.classList.remove('visible');
-      pendingReorderData = null;
-
-      // Update order for all tasks in this column
-      try {
-        for (let i = 0; i < sortedTasks.length; i++) {
-          const task = sortedTasks[i];
-          const newOrder = i;
-
-          // Only update if order changed
-          const currentOrder = task.order !== undefined ? task.order : parseInt(task.id);
-          if (currentOrder !== newOrder) {
-            const taskSessionId = task.sessionId || sessionId;
-            await fetch(`/api/tasks/${taskSessionId}/${task.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order: newOrder })
-            });
-          }
-        }
-
-        await refreshCurrentView();
-      } catch (error) {
-        console.error('Failed to reorder tasks:', error);
-        alert('Failed to reorder tasks');
-        await refreshCurrentView();
-      }
     }
 
     function deleteTask(taskId, sessionId) {
@@ -2723,6 +2251,7 @@
     }
 
     async function refreshCurrentView() {
+      fetchLiveUpdates();
       if (viewMode === 'all') {
         await showAllTasks();
       } else if (currentSessionId) {
@@ -2934,38 +2463,6 @@
               </tr>
             </table>
           </div>
-          <div>
-            <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Drag & Drop</h4>
-            <table style="width: 100%; font-size: 13px;">
-              <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);" colspan="2">
-                  <strong>Reorder within column:</strong> Drag tasks up or down within the same column to change priority order
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);" colspan="2">
-                  <em>Note: Task status (Pending/In Progress/Completed) is controlled by Claude Code, not the UI</em>
-                </td>
-              </tr>
-            </table>
-          </div>
-          <div>
-            <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Dialogs</h4>
-            <table style="width: 100%; font-size: 13px;">
-              <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Enter</kbd></td>
-                <td style="padding: 4px 0; color: var(--text-primary);">Save changes</td>
-              </tr>
-              <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Cmd+Enter</kbd></td>
-                <td style="padding: 4px 0; color: var(--text-primary);">Save changes (in textarea)</td>
-              </tr>
-              <tr>
-                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Esc</kbd></td>
-                <td style="padding: 4px 0; color: var(--text-primary);">Cancel and close</td>
-              </tr>
-            </table>
-          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -3034,34 +2531,6 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeDeleteResultModal()">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Dependency Conflict Warning Modal -->
-  <div id="dependency-conflict-modal" class="modal-overlay" onclick="closeDependencyConflictModal()">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
-      <div class="modal-header">
-        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="width: 20px; height: 20px;">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <circle cx="12" cy="17" r="0.5" fill="#f59e0b"/>
-          </svg>
-          Dependency Conflict
-        </h3>
-        <button class="modal-close" onclick="closeDependencyConflictModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div id="dependency-conflict-message" style="color: var(--text-primary); line-height: 1.6;"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeDependencyConflictModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="confirmReorder()" style="background: #f59e0b; border-color: #f59e0b;">Continue Anyway</button>
       </div>
     </div>
   </div>
