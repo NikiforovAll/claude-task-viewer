@@ -654,17 +654,10 @@
     }
 
     .task-card:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
+      outline: none;
     }
 
     .task-card.in-progress {
-      border-color: var(--accent);
-      border-left: 2px solid var(--accent);
-    }
-
-    .task-card.in-progress:hover {
-      border-left-color: var(--accent);
     }
 
     .task-card.completed {
@@ -2441,7 +2434,8 @@
         : `<div class="column-empty">${emptyIcon}<div>No completed tasks</div></div>`;
 
       if (selectedTaskId) {
-        const card = document.querySelector(`.task-card[data-task-id="${selectedTaskId}"][data-session-id="${selectedSessionId}"]`);
+        const card = document.querySelector(`.task-card[data-task-id="${selectedTaskId}"][data-session-id="${selectedSessionId}"]`)
+          || document.querySelector(`.task-card[data-task-id="${selectedTaskId}"]`);
         if (card) {
           card.classList.add('selected');
         } else {
@@ -2457,7 +2451,8 @@
       selectedTaskId = taskId;
       selectedSessionId = sessionId;
       if (!taskId) return;
-      const card = document.querySelector(`.task-card[data-task-id="${taskId}"][data-session-id="${sessionId}"]`);
+      const card = document.querySelector(`.task-card[data-task-id="${taskId}"][data-session-id="${sessionId}"]`)
+        || document.querySelector(`.task-card[data-task-id="${taskId}"]`);
       if (card) {
         card.classList.add('selected');
         card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -2569,7 +2564,8 @@
         }
       } else {
         if (selectedTaskId) {
-          const card = document.querySelector(`.task-card[data-task-id="${selectedTaskId}"][data-session-id="${selectedSessionId}"]`);
+          const card = document.querySelector(`.task-card[data-task-id="${selectedTaskId}"][data-session-id="${selectedSessionId}"]`)
+            || document.querySelector(`.task-card[data-task-id="${selectedTaskId}"]`);
           if (card) card.classList.add('selected');
         } else {
           navigateVertical(1);
