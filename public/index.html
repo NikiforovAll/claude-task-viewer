@@ -308,13 +308,6 @@
     }
 
     .session-name {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .session-name span {
       font-size: 14px;
       color: var(--text-primary);
       white-space: nowrap;
@@ -322,7 +315,7 @@
       text-overflow: ellipsis;
     }
 
-    .session-name .pulse {
+    .session-indicators .pulse {
       width: 8px;
       height: 8px;
       background: var(--accent);
@@ -655,23 +648,17 @@
     }
 
     .task-card:hover {
-      background: var(--bg-elevated);
+      background: var(--bg-hover);
       border-color: var(--text-muted);
       border-left-color: var(--text-muted);
     }
 
     .task-card:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
+      outline: none;
     }
 
     .task-card.in-progress {
-      border-color: var(--accent);
       border-left: 2px solid var(--accent);
-    }
-
-    .task-card.in-progress:hover {
-      border-left-color: var(--accent);
     }
 
     .task-card.completed {
@@ -685,6 +672,15 @@
 
     .task-card.blocked {
       opacity: 0.7;
+    }
+
+    .task-card.selected,
+    .task-card.selected:hover {
+      background: var(--bg-elevated);
+      border-color: var(--team);
+      border-left: 2px solid var(--team);
+      box-shadow: 0 0 0 1px var(--team-dim), 0 0 12px var(--team-dim);
+      opacity: 1;
     }
 
     .task-id {
@@ -1570,7 +1566,28 @@
     }
 
     .session-item:hover::before {
-      width: 2px;
+      width: 0;
+    }
+
+    .sidebar-focused .session-item.active {
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .sidebar-focused .session-item.active::before {
+      width: 0;
+    }
+
+    .session-item.kb-selected,
+    .session-item.kb-selected:hover,
+    .session-item.active.kb-selected {
+      background: var(--bg-elevated);
+      border-color: var(--team);
+      box-shadow: 0 0 0 1px var(--team-dim);
+    }
+
+    .session-item.kb-selected::before {
+      width: 0;
     }
   </style>
 </head>
@@ -1586,7 +1603,7 @@
               <path d="M5 13l4 4L19 7"/>
             </svg>
           </div>
-          <span class="logo-text">Claude Tasks</span>
+          <span class="logo-text">Dashboard</span>
         </div>
         <div id="connection-status" class="connection">
           <span class="connection-dot"></span>
@@ -1761,6 +1778,10 @@
     let allTasksCache = []; // Cache all tasks for search
     let bulkDeleteSessionId = null; // Track session for bulk delete
     let ownerFilter = '';
+    let selectedTaskId = null;
+    let selectedSessionId = null;
+    let focusZone = 'board'; // 'board' | 'sidebar'
+    let selectedSessionIdx = -1;
 
     function getUrlState() {
       const params = new URLSearchParams(window.location.search);
@@ -1822,6 +1843,11 @@
     const detailPanel = document.getElementById('detail-panel');
     const detailContent = document.getElementById('detail-content');
     const connectionStatus = document.getElementById('connection-status');
+    const COLUMNS = [
+      { el: pendingTasks },
+      { el: inProgressTasks },
+      { el: completedTasks },
+    ];
 
     let lastSessionsHash = '';
     let lastTasksHash = '';
@@ -2248,7 +2274,7 @@
         const percent = total > 0 ? Math.round((session.completed / total) * 100) : 0;
         const isActive = session.id === currentSessionId && viewMode === 'session';
         const hasInProgress = session.inProgress > 0;
-        const sessionName = session.name || session.id.slice(0, 8) + '...';
+        const sessionName = session.name || session.id;
         const projectName = session.project ? session.project.split('/').pop() : null;
         const primaryName = projectName || sessionName;
         const secondaryName = projectName ? sessionName : null;
@@ -2271,17 +2297,15 @@
 
         return `
           <button onclick="fetchTasks('${session.id}')" class="session-item ${isActive ? 'active' : ''}" title="${tooltip}">
-            <div class="session-name">
-              <span>${escapeHtml(primaryName)}</span>
+            <div class="session-name">${escapeHtml(primaryName)}</div>
+            ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
+            ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
+            <div class="session-progress">
               <span class="session-indicators">
                 ${isTeam ? `<span class="team-badge" title="${memberCount} team members"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${memberCount}</span>` : ''}
                 ${isTeam ? `<span class="team-info-btn" onclick="event.stopPropagation(); showTeamModalForSession('${session.id}')" title="View team info">ℹ</span>` : ''}
                 ${hasInProgress ? '<span class="pulse"></span>' : ''}
               </span>
-            </div>
-            ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
-            ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
-            <div class="session-progress">
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
               <span class="progress-text">${session.completed}/${total}</span>
             </div>
@@ -2289,6 +2313,20 @@
           </button>
         `;
       }).join('');
+
+      const items = getSessionItems();
+      const activeIdx = items.findIndex(el => el.classList.contains('active'));
+      if (activeIdx >= 0) selectedSessionIdx = activeIdx;
+
+      if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
+        if (items.length > 0) {
+          const clamped = Math.min(selectedSessionIdx, items.length - 1);
+          selectedSessionIdx = clamped;
+          items[clamped].classList.add('kb-selected');
+        } else {
+          selectedSessionIdx = -1;
+        }
+      }
     }
 
     function renderSession() {
@@ -2349,8 +2387,9 @@
         <div
           role="listitem"
           tabindex="0"
+          data-task-id="${task.id}"
+          data-session-id="${actualSessionId}"
           onclick="showTaskDetail('${task.id}', '${actualSessionId}')"
-          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showTaskDetail('${task.id}','${actualSessionId}')}"
           class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}"
           aria-label="${escapeHtml(task.subject)} — ${task.status.replace('_',' ')}">
           <div class="task-id">
@@ -2393,6 +2432,145 @@
       completedTasks.innerHTML = completed.length > 0
         ? completed.map(renderTaskCard).join('')
         : `<div class="column-empty">${emptyIcon}<div>No completed tasks</div></div>`;
+
+      if (selectedTaskId) {
+        const card = document.querySelector(`.task-card[data-task-id="${selectedTaskId}"][data-session-id="${selectedSessionId}"]`)
+          || document.querySelector(`.task-card[data-task-id="${selectedTaskId}"]`);
+        if (card) {
+          card.classList.add('selected');
+        } else {
+          selectedTaskId = null;
+          selectedSessionId = null;
+        }
+      }
+    }
+
+    function selectTask(taskId, sessionId) {
+      const prev = document.querySelector('.task-card.selected');
+      if (prev) prev.classList.remove('selected');
+      selectedTaskId = taskId;
+      selectedSessionId = sessionId;
+      if (!taskId) return;
+      const card = document.querySelector(`.task-card[data-task-id="${taskId}"][data-session-id="${sessionId}"]`)
+        || document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+      if (card) {
+        card.classList.add('selected');
+        card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+
+    function getSelectedCardInfo() {
+      if (!selectedTaskId) return null;
+      for (let ci = 0; ci < COLUMNS.length; ci++) {
+        const cards = Array.from(COLUMNS[ci].el.querySelectorAll('.task-card'));
+        for (let i = 0; i < cards.length; i++) {
+          if (cards[i].dataset.taskId === selectedTaskId) {
+            return { colIndex: ci, cardIndex: i, card: cards[i] };
+          }
+        }
+      }
+      return null;
+    }
+
+    function navigateVertical(direction) {
+      const info = getSelectedCardInfo();
+      if (!info) {
+        for (const col of COLUMNS) {
+          const cards = Array.from(col.el.querySelectorAll('.task-card'));
+          if (cards.length > 0) {
+            selectTask(cards[0].dataset.taskId, cards[0].dataset.sessionId);
+            return;
+          }
+        }
+        return;
+      }
+      const cards = Array.from(COLUMNS[info.colIndex].el.querySelectorAll('.task-card'));
+      const newIndex = info.cardIndex + direction;
+      if (newIndex >= 0 && newIndex < cards.length) {
+        selectTask(cards[newIndex].dataset.taskId, cards[newIndex].dataset.sessionId);
+      }
+    }
+
+    function navigateHorizontal(direction) {
+      const info = getSelectedCardInfo();
+      if (!info) {
+        navigateVertical(1);
+        return;
+      }
+      let newColIndex = info.colIndex + direction;
+      while (newColIndex >= 0 && newColIndex < COLUMNS.length) {
+        const cards = Array.from(COLUMNS[newColIndex].el.querySelectorAll('.task-card'));
+        if (cards.length > 0) {
+          const clampedIndex = Math.min(info.cardIndex, cards.length - 1);
+          selectTask(cards[clampedIndex].dataset.taskId, cards[clampedIndex].dataset.sessionId);
+          return;
+        }
+        newColIndex += direction;
+      }
+    }
+
+    function getSessionItems() {
+      return Array.from(sessionsList.querySelectorAll('.session-item'));
+    }
+
+    function selectSessionByIndex(idx) {
+      const items = getSessionItems();
+      if (items.length === 0) return;
+      const prev = sessionsList.querySelector('.session-item.kb-selected');
+      if (prev) prev.classList.remove('kb-selected');
+      selectedSessionIdx = Math.max(0, Math.min(idx, items.length - 1));
+      items[selectedSessionIdx].classList.add('kb-selected');
+      items[selectedSessionIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function navigateSession(direction) {
+      const items = getSessionItems();
+      if (items.length === 0) return;
+      if (selectedSessionIdx < 0) {
+        selectSessionByIndex(0);
+        return;
+      }
+      const newIdx = selectedSessionIdx + direction;
+      if (newIdx >= 0 && newIdx < items.length) {
+        selectSessionByIndex(newIdx);
+      }
+    }
+
+    function activateSelectedSession() {
+      const items = getSessionItems();
+      if (selectedSessionIdx >= 0 && selectedSessionIdx < items.length) {
+        items[selectedSessionIdx].click();
+      }
+    }
+
+    function setFocusZone(zone) {
+      const sidebar = document.querySelector('.sidebar');
+      // Clear all zone visuals
+      sidebar.classList.remove('sidebar-focused');
+      const prevSession = sessionsList.querySelector('.session-item.kb-selected');
+      if (prevSession) prevSession.classList.remove('kb-selected');
+      const selCard = document.querySelector('.task-card.selected');
+      if (selCard) selCard.classList.remove('selected');
+
+      focusZone = zone;
+      if (zone === 'sidebar') {
+        sidebar.classList.add('sidebar-focused');
+        const items = getSessionItems();
+        if (selectedSessionIdx < 0 && items.length > 0) {
+          const activeIdx = items.findIndex(el => el.classList.contains('active'));
+          selectSessionByIndex(activeIdx >= 0 ? activeIdx : 0);
+        } else if (items.length > 0) {
+          selectSessionByIndex(selectedSessionIdx);
+        }
+      } else {
+        if (selectedTaskId) {
+          const card = document.querySelector(`.task-card[data-task-id="${selectedTaskId}"][data-session-id="${selectedSessionId}"]`)
+            || document.querySelector(`.task-card[data-task-id="${selectedTaskId}"]`);
+          if (card) card.classList.add('selected');
+        } else {
+          navigateVertical(1);
+        }
+      }
     }
 
     function getAvailableTasksOptions(currentTaskId = null) {
@@ -2448,6 +2626,8 @@
 
       if (!task) return;
 
+      const actualSid = task.sessionId || sessionId || currentSessionId;
+      selectTask(taskId, actualSid);
       detailPanel.classList.add('visible');
 
       const statusLabels = {
@@ -2691,8 +2871,75 @@
     document.getElementById('close-detail').onclick = closeDetailPanel;
 
     document.addEventListener('keydown', (e) => {
-      // Ignore if typing in input/textarea
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return;
+      }
+
+      if (document.querySelector('.modal-overlay.visible')) return;
+
+      // Tab toggles focus zone
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setFocusZone(focusZone === 'board' ? 'sidebar' : 'board');
+        return;
+      }
+
+      // Sidebar navigation
+      if (focusZone === 'sidebar') {
+        if (e.key === 'j' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          navigateSession(1);
+          return;
+        }
+        if (e.key === 'k' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          navigateSession(-1);
+          return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activateSelectedSession();
+          return;
+        }
+        if (e.key === 'Escape') {
+          setFocusZone('board');
+          return;
+        }
+        if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+          e.preventDefault();
+          showHelpModal();
+        }
+        return;
+      }
+
+      // Board navigation
+      const navKeys = ['j','k','h','l','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+      if (navKeys.includes(e.key)) {
+        e.preventDefault();
+        if (e.key === 'j' || e.key === 'ArrowDown') navigateVertical(1);
+        else if (e.key === 'k' || e.key === 'ArrowUp') navigateVertical(-1);
+        else if (e.key === 'h' || e.key === 'ArrowLeft') navigateHorizontal(-1);
+        else if (e.key === 'l' || e.key === 'ArrowRight') navigateHorizontal(1);
+
+        if (selectedTaskId && detailPanel.classList.contains('visible')) {
+          showTaskDetail(selectedTaskId, selectedSessionId);
+        }
+        return;
+      }
+
+      if ((e.key === 'Enter' || e.key === ' ') && selectedTaskId && e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        if (detailPanel.classList.contains('visible')) {
+          const labelEl = document.querySelector('.detail-label');
+          const shownId = labelEl?.textContent.match(/\d+/)?.[0];
+          if (shownId === selectedTaskId) {
+            closeDetailPanel();
+          } else {
+            showTaskDetail(selectedTaskId, selectedSessionId);
+          }
+        } else {
+          showTaskDetail(selectedTaskId, selectedSessionId);
+        }
         return;
       }
 
@@ -2701,18 +2948,13 @@
       }
 
       if (detailPanel.classList.contains('visible')) {
-        // Get task ID from detail panel
         const labelElement = document.querySelector('.detail-label');
         if (!labelElement) return;
-
         const taskId = labelElement.textContent.match(/\d+/)?.[0];
         if (!taskId) return;
-
         const task = currentTasks.find(t => t.id === taskId);
         if (!task) return;
-
         const sessionId = task.sessionId || currentSessionId;
-
         if (e.key === 'd' || e.key === 'D') {
           e.preventDefault();
           deleteTask(taskId, sessionId);
@@ -3025,12 +3267,8 @@
     }
 
     fetchSessions().then(() => {
-      if (urlState.view === 'all') {
-        showAllTasks();
-      } else if (urlState.session) {
+      if (urlState.session) {
         fetchTasks(urlState.session);
-      } else if (sessions.length > 0) {
-        fetchTasks(sessions[0].id);
       } else {
         showAllTasks();
       }
@@ -3044,9 +3282,8 @@
       ownerFilter = s.owner || '';
       searchQuery = s.search || '';
       loadPreferences();
-      if (s.view === 'all') showAllTasks();
-      else if (s.session) fetchTasks(s.session);
-      else if (sessions.length > 0) fetchTasks(sessions[0].id);
+      if (s.session) fetchTasks(s.session);
+      else showAllTasks();
     });
   </script>
 
@@ -3073,6 +3310,35 @@
               <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Esc</kbd></td>
                 <td style="padding: 4px 0; color: var(--text-primary);">Close panels or cancel</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Tab</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Toggle sidebar / board focus</td>
+              </tr>
+            </table>
+          </div>
+          <div>
+            <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 14px; font-weight: 600;">Navigation</h4>
+            <table style="width: 100%; font-size: 13px;">
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">J</kbd> / <kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">&darr;</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Next task in column</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">K</kbd> / <kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">&uarr;</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Previous task in column</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">H</kbd> / <kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">&larr;</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Move to left column</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">L</kbd> / <kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">&rarr;</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Move to right column</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Enter</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Toggle task detail panel</td>
               </tr>
             </table>
           </div>
