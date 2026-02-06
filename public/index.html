@@ -345,25 +345,11 @@
       padding: 2px 6px;
       background: var(--border);
       border-radius: 3px;
-      display: inline-block;
+      display: block;
       font-family: var(--mono);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-    }
-
-    .session-branch {
-      font-size: 10px;
-      color: var(--accent);
-      margin-top: 3px;
-      padding: 2px 6px;
-      background: var(--border);
-      border-radius: 3px;
-      display: inline-block;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
       font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
     }
 
@@ -1758,7 +1744,7 @@
     let currentSessionId = null;
     let currentTasks = [];
     let viewMode = 'session';
-    let sessionFilter = localStorage.getItem('sessionFilter') || 'all'; // 'all' or 'active'
+    let sessionFilter = localStorage.getItem('sessionFilter') || 'active';
     let sessionLimit = localStorage.getItem('sessionLimit') || '20'; // '10', '20', '50', 'all'
     let filterProject = null; // null = all projects, or project path to filter
     let searchQuery = ''; // Search query for fuzzy search
@@ -2709,12 +2695,13 @@
         let refreshTimer = null;
         function debouncedRefresh(sessionId, isMetadata) {
           clearTimeout(refreshTimer);
+          const delay = isMetadata ? 2000 : 500;
           refreshTimer = setTimeout(() => {
             fetchSessions().catch(err => console.error('[SSE] fetchSessions failed:', err));
             if (currentSessionId && (isMetadata || sessionId === currentSessionId)) {
               fetchTasks(currentSessionId);
             }
-          }, 500);
+          }, delay);
         }
 
         eventSource.onmessage = (event) => {
