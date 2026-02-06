@@ -521,6 +521,10 @@ projectsWatcher.on('all', (event, filePath) => {
   }
 });
 
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // Start server
 const server = app.listen(PORT, () => {
   const actualPort = server.address().port;

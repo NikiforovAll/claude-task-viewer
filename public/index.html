@@ -460,6 +460,7 @@
 
     /* Footer */
     .sidebar-footer {
+      flex-shrink: 0;
       padding: 14px 20px;
       border-top: none;
       background-image: linear-gradient(to right, transparent, var(--border), transparent);
@@ -3236,6 +3237,12 @@
       const sidebar = document.querySelector('.sidebar');
       const collapsed = sidebar.classList.toggle('collapsed');
       localStorage.setItem('sidebar-collapsed', collapsed);
+      if (collapsed) {
+        sidebar.style.width = '';
+      } else {
+        const w = getComputedStyle(sidebar).getPropertyValue('--sidebar-width');
+        if (w) sidebar.style.width = w;
+      }
     }
 
     function loadSidebarState() {
