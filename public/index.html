@@ -658,6 +658,7 @@
     }
 
     .task-card.in-progress {
+      border-left: 2px solid var(--accent);
     }
 
     .task-card.completed {
@@ -2389,7 +2390,6 @@
           data-task-id="${task.id}"
           data-session-id="${actualSessionId}"
           onclick="showTaskDetail('${task.id}', '${actualSessionId}')"
-          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showTaskDetail('${task.id}','${actualSessionId}')}"
           class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}"
           aria-label="${escapeHtml(task.subject)} — ${task.status.replace('_',' ')}">
           <div class="task-id">
