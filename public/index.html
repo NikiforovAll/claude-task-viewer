@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CC Kanban</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a1a'/%3E%3Crect x='4' y='6' width='7' height='20' rx='2' fill='%23e8927c'/%3E%3Crect x='13' y='6' width='7' height='14' rx='2' fill='%23e8927c'/%3E%3Crect x='22' y='6' width='7' height='8' rx='2' fill='%23e8927c'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
@@ -171,6 +172,12 @@
       display: flex;
       gap: 6px;
       padding: 0 16px 10px;
+    }
+
+    .reset-btn {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
     }
 
     .filter-dropdown {
@@ -1633,6 +1640,12 @@
             <option value="50">Show 50</option>
             <option value="all">Show All</option>
           </select>
+          <button class="icon-btn reset-btn" onclick="resetState()" title="Reset all filters" aria-label="Reset all filters">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M3 12a9 9 0 1 1 9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+              <path d="M3 22v-6h6"/>
+            </svg>
+          </button>
         </div>
         <div id="sessions-list" class="sessions-list"></div>
       </div>
@@ -1741,13 +1754,56 @@
     let currentSessionId = null;
     let currentTasks = [];
     let viewMode = 'session';
-    let sessionFilter = localStorage.getItem('sessionFilter') || 'active';
-    let sessionLimit = localStorage.getItem('sessionLimit') || '20'; // '10', '20', '50', 'all'
+    let sessionFilter = 'active';
+    let sessionLimit = '20';
     let filterProject = null; // null = all projects, or project path to filter
     let searchQuery = ''; // Search query for fuzzy search
     let allTasksCache = []; // Cache all tasks for search
     let bulkDeleteSessionId = null; // Track session for bulk delete
     let ownerFilter = '';
+
+    function getUrlState() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        session: params.get('session'),
+        view: params.get('view'),
+        filter: params.get('filter'),
+        limit: params.get('limit'),
+        project: params.get('project'),
+        owner: params.get('owner'),
+        search: params.get('search'),
+      };
+    }
+
+    function updateUrl() {
+      const params = new URLSearchParams();
+      if (viewMode === 'all') params.set('view', 'all');
+      if (currentSessionId) params.set('session', currentSessionId);
+      if (sessionFilter !== 'active') params.set('filter', sessionFilter);
+      if (sessionLimit !== '20') params.set('limit', sessionLimit);
+      if (filterProject) params.set('project', filterProject);
+      if (ownerFilter) params.set('owner', ownerFilter);
+      if (searchQuery) params.set('search', searchQuery);
+      const qs = params.toString();
+      const url = qs ? `?${qs}` : window.location.pathname;
+      history.replaceState(null, '', url);
+    }
+
+    function resetState() {
+      history.replaceState(null, '', window.location.pathname);
+      sessionFilter = 'active';
+      sessionLimit = '20';
+      filterProject = null;
+      ownerFilter = '';
+      searchQuery = '';
+      viewMode = 'all';
+      currentSessionId = null;
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = '';
+      document.getElementById('search-clear-btn')?.classList.remove('visible');
+      loadPreferences();
+      fetchSessions().then(() => showAllTasks());
+    }
 
     // DOM
     const sessionsList = document.getElementById('sessions-list');
@@ -1809,6 +1865,7 @@
         clearBtn.classList.remove('visible');
       }
 
+      updateUrl();
       renderSessions();
     }
 
@@ -1817,6 +1874,7 @@
       searchInput.value = '';
       searchQuery = '';
       document.getElementById('search-clear-btn').classList.remove('visible');
+      updateUrl();
       renderSessions();
     }
 
@@ -2073,12 +2131,14 @@
         currentTasks = newTasks;
         currentSessionId = sessionId;
         ownerFilter = '';
+        updateUrl();
         renderSession();
       } catch (error) {
         console.error('Failed to fetch tasks:', error);
         currentTasks = [];
         currentSessionId = sessionId;
         lastCurrentTasksHash = '';
+        updateUrl();
         renderSession();
       }
     }
@@ -2094,6 +2154,7 @@
           tasks = tasks.filter(t => t.project === filterProject);
         }
         currentTasks = tasks;
+        updateUrl();
         renderAllTasks();
         renderSessions();
       } catch (error) {
@@ -2762,18 +2823,19 @@
 
     function filterBySessions(value) {
       sessionFilter = value;
-      localStorage.setItem('sessionFilter', sessionFilter);
+      updateUrl();
       renderSessions();
     }
 
     function changeSessionLimit(value) {
       sessionLimit = value;
-      localStorage.setItem('sessionLimit', sessionLimit);
+      updateUrl();
       fetchSessions();
     }
 
     function filterByProject(project) {
       filterProject = project || null;
+      updateUrl();
       renderSessions();
       fetchLiveUpdates();
       showAllTasks();
@@ -2940,22 +3002,51 @@
       const c = value ? getOwnerColor(value) : null;
       select.style.color = c ? c.color : '';
       select.style.backgroundColor = c ? c.bg : '';
+      updateUrl();
       renderKanban();
     }
 
     // Init
     loadTheme();
+
+    const urlState = getUrlState();
+    sessionFilter = urlState.filter || 'active';
+    sessionLimit = urlState.limit || '20';
+    filterProject = urlState.project || null;
+    ownerFilter = urlState.owner || '';
+    searchQuery = urlState.search || '';
+
     loadPreferences();
     setupEventSource();
 
-    // Fetch sessions and show newest one by default
+    if (urlState.search) {
+      document.getElementById('search-input').value = urlState.search;
+      document.getElementById('search-clear-btn').classList.add('visible');
+    }
+
     fetchSessions().then(() => {
-      if (sessions.length > 0) {
-        // Sessions are already sorted by newest first from API
+      if (urlState.view === 'all') {
+        showAllTasks();
+      } else if (urlState.session) {
+        fetchTasks(urlState.session);
+      } else if (sessions.length > 0) {
         fetchTasks(sessions[0].id);
       } else {
         showAllTasks();
       }
+    });
+
+    window.addEventListener('popstate', () => {
+      const s = getUrlState();
+      sessionFilter = s.filter || 'active';
+      sessionLimit = s.limit || '20';
+      filterProject = s.project || null;
+      ownerFilter = s.owner || '';
+      searchQuery = s.search || '';
+      loadPreferences();
+      if (s.view === 'all') showAllTasks();
+      else if (s.session) fetchTasks(s.session);
+      else if (sessions.length > 0) fetchTasks(sessions[0].id);
     });
   </script>
 
