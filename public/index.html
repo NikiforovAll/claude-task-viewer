@@ -936,6 +936,34 @@
       font-family: var(--serif);
       font-size: 22px;
       line-height: 1.4;
+      cursor: pointer;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      transition: border-color 0.15s ease;
+    }
+
+    .detail-title:hover {
+      border-color: var(--border);
+    }
+
+    .detail-title-input {
+      font-family: var(--serif);
+      font-size: 22px;
+      line-height: 1.4;
+      width: 100%;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      color: var(--text-primary);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .detail-title-input:focus {
+      outline: none;
     }
 
     .detail-status {
@@ -1008,6 +1036,79 @@
     }
 
     .detail-desc {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px 6px;
+      margin: -4px -6px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      transition: border-color 0.15s ease;
+    }
+
+    .detail-desc:hover {
+      border-color: var(--border);
+    }
+
+    .detail-desc-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 8px 10px;
+      margin: -4px -6px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .detail-desc-textarea:focus {
+      outline: none;
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+
+    .edit-actions button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .edit-save {
+      background: var(--accent);
+      color: white;
+    }
+
+    .edit-save:hover {
+      filter: brightness(1.1);
+    }
+
+    .edit-cancel {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border) !important;
+    }
+
+    .edit-cancel:hover {
+      color: var(--text-primary);
+    }
+
+    .detail-deps {
       font-size: 14px;
       line-height: 1.7;
       color: var(--text-secondary);
@@ -2806,7 +2907,7 @@
 
         <div class="detail-section">
           <div class="detail-label">Blocked By</div>
-          <div class="detail-desc">
+          <div class="detail-deps">
             ${task.blockedBy && task.blockedBy.length > 0
               ? `<div class="detail-box blocked"><strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}</div>`
               : '<em style="color: var(--text-muted); font-size: 13px;">No dependencies</em>'}
@@ -2815,7 +2916,7 @@
 
         <div class="detail-section">
           <div class="detail-label">Blocks</div>
-          <div class="detail-desc">
+          <div class="detail-deps">
             ${task.blocks && task.blocks.length > 0
               ? `<div class="detail-box blocks"><strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}</div>`
               : '<em style="color: var(--text-muted); font-size: 13px;">No tasks blocked</em>'}
@@ -2835,6 +2936,108 @@
       const deleteBtn = document.getElementById('delete-task-btn');
       deleteBtn.style.display = '';
       deleteBtn.onclick = () => deleteTask(task.id, actualSessionId);
+
+      // Setup inline editing
+      const titleEl = detailContent.querySelector('.detail-title');
+      if (titleEl) {
+        titleEl.onclick = () => editTitle(titleEl, task, actualSessionId);
+      }
+
+      const descEl = detailContent.querySelector('.detail-desc');
+      if (descEl) {
+        descEl.onclick = () => editDescription(descEl, task, actualSessionId);
+      }
+    }
+
+    function editTitle(titleEl, task, sessionId) {
+      if (titleEl.querySelector('input')) return;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'detail-title-input';
+      input.value = task.subject;
+
+      titleEl.replaceWith(input);
+      input.focus();
+      input.select();
+
+      const save = async () => {
+        const val = input.value.trim();
+        if (val && val !== task.subject) {
+          await saveTaskField(task.id, sessionId, 'subject', val);
+        } else {
+          showTaskDetail(task.id, sessionId);
+        }
+      };
+
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); save(); }
+        if (e.key === 'Escape') showTaskDetail(task.id, sessionId);
+      };
+      input.onblur = () => save();
+    }
+
+    function editDescription(descEl, task, sessionId) {
+      if (descEl.querySelector('textarea')) return;
+      const wrapper = document.createElement('div');
+      const textarea = document.createElement('textarea');
+      textarea.className = 'detail-desc-textarea';
+      textarea.value = task.description || '';
+      textarea.rows = Math.max(5, (task.description || '').split('\n').length + 2);
+
+      const actions = document.createElement('div');
+      actions.className = 'edit-actions';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'edit-save';
+      saveBtn.textContent = 'Save';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'edit-cancel';
+      cancelBtn.textContent = 'Cancel';
+
+      actions.append(cancelBtn, saveBtn);
+      wrapper.append(textarea, actions);
+      descEl.replaceWith(wrapper);
+      textarea.focus();
+
+      const save = async () => {
+        const val = textarea.value;
+        if (val !== (task.description || '')) {
+          await saveTaskField(task.id, sessionId, 'description', val);
+        } else {
+          showTaskDetail(task.id, sessionId);
+        }
+      };
+
+      saveBtn.onclick = save;
+      cancelBtn.onclick = () => showTaskDetail(task.id, sessionId);
+      textarea.onkeydown = (e) => {
+        if (e.key === 'Escape') showTaskDetail(task.id, sessionId);
+      };
+    }
+
+    async function saveTaskField(taskId, sessionId, field, value) {
+      try {
+        const res = await fetch(`/api/tasks/${sessionId}/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: value })
+        });
+
+        if (res.ok) {
+          lastCurrentTasksHash = null;
+          if (viewMode === 'all') {
+            const tasksRes = await fetch('/api/tasks/all');
+            currentTasks = await tasksRes.json();
+            renderKanban();
+          } else {
+            await fetchTasks(sessionId);
+          }
+          showTaskDetail(taskId, sessionId);
+        }
+      } catch (error) {
+        console.error('Failed to update task:', error);
+      }
     }
 
     async function addNote(event, taskId, sessionId) {

@@ -532,6 +532,32 @@ app.post('/api/tasks/:sessionId/:taskId/note', async (req, res) => {
   }
 });
 
+// API: Update task fields (subject, description)
+app.put('/api/tasks/:sessionId/:taskId', async (req, res) => {
+  try {
+    const { sessionId, taskId } = req.params;
+    const { subject, description } = req.body;
+
+    const taskPath = path.join(TASKS_DIR, sessionId, `${taskId}.json`);
+
+    if (!existsSync(taskPath)) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const task = JSON.parse(await fs.readFile(taskPath, 'utf8'));
+
+    if (subject !== undefined) task.subject = subject;
+    if (description !== undefined) task.description = description;
+
+    await fs.writeFile(taskPath, JSON.stringify(task, null, 2));
+
+    res.json({ success: true, task });
+  } catch (error) {
+    console.error('Error updating task:', error);
+    res.status(500).json({ error: 'Failed to update task' });
+  }
+});
+
 // API: Delete a task
 app.delete('/api/tasks/:sessionId/:taskId', async (req, res) => {
   try {
