@@ -1366,6 +1366,19 @@
       display: flex;
     }
 
+    .plan-modal-overlay {
+      z-index: 10001;
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .modal.plan-modal {
+      width: 60vw;
+      max-width: 60vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+
     .modal {
       background: var(--bg-surface);
       border: 1px solid var(--border);
@@ -3322,21 +3335,34 @@
       const session = sessions.find(s => s.id === sessionId);
       if (!session) return;
 
+      const promises = [];
+
+      // Fetch team config
       let teamConfig = null;
       if (session.isTeam) {
-        try {
-          const res = await fetch(`/api/teams/${sessionId}`);
-          if (res.ok) teamConfig = await res.json();
-        } catch (e) {
-          console.error('Failed to fetch team config:', e);
-        }
+        promises.push(
+          fetch(`/api/teams/${sessionId}`).then(r => r.ok ? r.json() : null).catch(() => null)
+            .then(data => { teamConfig = data; })
+        );
       }
 
+      // Fetch plan
+      let planContent = null;
+      promises.push(
+        fetch(`/api/sessions/${sessionId}/plan`).then(r => r.ok ? r.json() : null).catch(() => null)
+          .then(data => { planContent = data?.content || null; })
+      );
+
+      await Promise.all(promises);
+
       const tasks = currentSessionId === sessionId ? currentTasks : [];
-      showInfoModal(session, teamConfig, tasks);
+      _planSessionId = sessionId;
+      showInfoModal(session, teamConfig, tasks, planContent);
     }
 
-    function showInfoModal(session, teamConfig, tasks) {
+    let _pendingPlanContent = null;
+
+    function showInfoModal(session, teamConfig, tasks, planContent) {
       const modal = document.getElementById('team-modal');
       const titleEl = document.getElementById('team-modal-title');
       const bodyEl = document.getElementById('team-modal-body');
@@ -3365,6 +3391,20 @@
         html += `<span style="font-weight: 500; color: var(--text-secondary); font-size: 12px; white-space: nowrap;">${label}</span><span>${value}</span>`;
       });
       html += `</div>`;
+
+      if (planContent) {
+        _pendingPlanContent = planContent;
+        const titleMatch = planContent.match(/^#\s+(.+)$/m);
+        const planTitle = titleMatch ? titleMatch[1].trim() : null;
+        html += `<div onclick="openPlanModal()" style="margin-bottom: 16px; padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.15s ease;" onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg-hover)'" onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg-elevated)'">
+          <span style="font-size: 14px;">📋</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Plan</div>
+            ${planTitle ? `<div style="font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(planTitle)}</div>` : ''}
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="width: 16px; height: 16px; flex-shrink: 0;"><path d="M9 18l6-6-6-6"/></svg>
+        </div>`;
+      }
 
       // Team info section
       if (teamConfig) {
@@ -3415,6 +3455,7 @@
 
       const keyHandler = (e) => {
         if (e.key === 'Escape') {
+          if (document.getElementById('plan-modal').classList.contains('visible')) return;
           e.preventDefault();
           closeTeamModal();
           document.removeEventListener('keydown', keyHandler);
@@ -3425,6 +3466,34 @@
 
     function closeTeamModal() {
       document.getElementById('team-modal').classList.remove('visible');
+    }
+
+    let _planSessionId = null;
+
+    function openPlanModal() {
+      if (!_pendingPlanContent) return;
+      const body = document.getElementById('plan-modal-body');
+      body.innerHTML = DOMPurify.sanitize(marked.parse(_pendingPlanContent));
+      document.getElementById('plan-modal').classList.add('visible');
+
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closePlanModal();
+          document.removeEventListener('keydown', keyHandler, true);
+        }
+      };
+      document.addEventListener('keydown', keyHandler, true);
+    }
+
+    function closePlanModal() {
+      document.getElementById('plan-modal').classList.remove('visible');
+    }
+
+    function openPlanInEditor() {
+      if (!_planSessionId) return;
+      fetch(`/api/sessions/${_planSessionId}/plan/open`, { method: 'POST' }).catch(() => {});
     }
 
     function updateOwnerFilter() {
@@ -3664,6 +3733,25 @@
       <div id="team-modal-body" class="modal-body" style="overflow-y: auto; flex: 1;"></div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeTeamModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan Modal (stacked on top of info modal) -->
+  <div id="plan-modal" class="modal-overlay plan-modal-overlay" onclick="closePlanModal()">
+    <div class="modal plan-modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="plan-modal-title" class="modal-title">Plan</h3>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; margin-left: auto; margin-right: 12px;" onclick="openPlanInEditor()">Open in Editor</button>
+        <button class="modal-close" aria-label="Close dialog" onclick="closePlanModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div id="plan-modal-body" class="modal-body detail-desc" style="overflow-y: auto; flex: 1;"></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closePlanModal()">Close</button>
       </div>
     </div>
   </div>

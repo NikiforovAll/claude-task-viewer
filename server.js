@@ -31,6 +31,7 @@ const CLAUDE_DIR = getClaudeDir();
 const TASKS_DIR = path.join(CLAUDE_DIR, 'tasks');
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 const TEAMS_DIR = path.join(CLAUDE_DIR, 'teams');
+const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
 
 function isTeamSession(sessionId) {
   return existsSync(path.join(TEAMS_DIR, sessionId, 'config.json'));
@@ -338,6 +339,45 @@ app.get('/api/sessions/:sessionId', async (req, res) => {
   } catch (error) {
     console.error('Error getting session:', error);
     res.status(500).json({ error: 'Failed to get session' });
+  }
+});
+
+// API: Get session plan
+app.get('/api/sessions/:sessionId/plan', async (req, res) => {
+  try {
+    const metadata = loadSessionMetadata();
+    const meta = metadata[req.params.sessionId];
+    const slug = meta?.slug;
+    if (!slug) return res.status(404).json({ error: 'No plan found' });
+
+    const planPath = path.join(PLANS_DIR, `${slug}.md`);
+    if (!existsSync(planPath)) return res.status(404).json({ error: 'No plan found' });
+
+    const content = await fs.readFile(planPath, 'utf8');
+    res.json({ content, slug });
+  } catch (error) {
+    console.error('Error reading plan:', error);
+    res.status(500).json({ error: 'Failed to read plan' });
+  }
+});
+
+// API: Open session plan in VS Code
+app.post('/api/sessions/:sessionId/plan/open', (req, res) => {
+  try {
+    const metadata = loadSessionMetadata();
+    const meta = metadata[req.params.sessionId];
+    const slug = meta?.slug;
+    if (!slug) return res.status(404).json({ error: 'No plan found' });
+
+    const planPath = path.join(PLANS_DIR, `${slug}.md`);
+    if (!existsSync(planPath)) return res.status(404).json({ error: 'No plan found' });
+
+    const editor = process.env.EDITOR || 'code';
+    require('child_process').exec(`${editor} "${planPath}"`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error opening plan in VS Code:', error);
+    res.status(500).json({ error: 'Failed to open plan' });
   }
 });
 
