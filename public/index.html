@@ -13,6 +13,9 @@
   </style>
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github-dark.min.css" id="hljs-theme-dark">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github.min.css" id="hljs-theme-light" disabled>
+  <script defer src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
   <style>
     :root {
       --bg-deep: #101114;
@@ -1011,12 +1014,23 @@
     }
 
     .detail-desc pre {
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 12px 0;
+      font-size: 12px;
+    }
+
+    .detail-desc pre code.hljs {
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .detail-desc pre code {
       background: var(--bg-elevated);
       padding: 12px;
       border-radius: 6px;
+      display: block;
       overflow-x: auto;
-      margin: 12px 0;
-      font-size: 12px;
     }
 
     .detail-desc code {
@@ -1024,11 +1038,6 @@
       padding: 2px 6px;
       border-radius: 3px;
       font-size: 0.9em;
-    }
-
-    .detail-desc pre code {
-      background: transparent;
-      padding: 0;
     }
 
     .detail-desc hr {
@@ -3269,6 +3278,15 @@
         localStorage.setItem('theme', 'light');
       }
       updateThemeIcon();
+      syncHljsTheme();
+    }
+
+    function syncHljsTheme() {
+      const isLight = document.body.classList.contains('light');
+      const dark = document.getElementById('hljs-theme-dark');
+      const light = document.getElementById('hljs-theme-light');
+      if (dark) dark.disabled = isLight;
+      if (light) light.disabled = !isLight;
     }
 
     function updateThemeIcon() {
@@ -3290,6 +3308,7 @@
       }
       // If no saved preference, system prefers-color-scheme CSS handles it
       updateThemeIcon();
+      syncHljsTheme();
     }
 
     function toggleSidebar() {
@@ -3564,6 +3583,23 @@
 
     // Init
     loadTheme();
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+        const renderer = new marked.Renderer();
+        renderer.code = function({ text, lang }) {
+          let highlighted;
+          if (lang && hljs.getLanguage(lang)) {
+            highlighted = hljs.highlight(text, { language: lang }).value;
+          } else {
+            highlighted = hljs.highlightAuto(text).value;
+          }
+          return `<pre><code class="hljs language-${escapeHtml(lang || '')}">${highlighted}</code></pre>`;
+        };
+        marked.use({ renderer });
+      }
+    });
+
     loadSidebarState();
     initSidebarResize();
     fetch('/api/version').then(r => r.json()).then(d => {
