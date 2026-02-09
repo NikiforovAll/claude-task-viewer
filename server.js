@@ -206,7 +206,7 @@ function loadSessionMetadata() {
     console.error('Error loading session metadata:', e);
   }
 
-  // For team sessions with no JSONL match, try team config for project path
+  // For team sessions with no JSONL match, resolve from team config + parent session
   if (existsSync(TASKS_DIR)) {
     const taskDirs = readdirSync(TASKS_DIR, { withFileTypes: true })
       .filter(d => d.isDirectory());
@@ -214,11 +214,18 @@ function loadSessionMetadata() {
       if (!metadata[dir.name]) {
         const teamConfig = loadTeamConfig(dir.name);
         if (teamConfig) {
+          const parentMeta = teamConfig.leadSessionId ? metadata[teamConfig.leadSessionId] : null;
+          const leadMember = teamConfig.members?.find(m => m.agentId === teamConfig.leadAgentId) || teamConfig.members?.[0];
+          const project = parentMeta?.project || leadMember?.cwd || teamConfig.working_dir || null;
+
           metadata[dir.name] = {
-            customTitle: null,
-            slug: null,
-            project: teamConfig.working_dir || null,
-            jsonlPath: null
+            customTitle: parentMeta?.customTitle || null,
+            slug: parentMeta?.slug || null,
+            project,
+            jsonlPath: parentMeta?.jsonlPath || null,
+            description: parentMeta?.description || teamConfig.description || null,
+            gitBranch: parentMeta?.gitBranch || null,
+            created: parentMeta?.created || null
           };
         }
       }
