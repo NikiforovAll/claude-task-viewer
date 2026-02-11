@@ -706,6 +706,10 @@ plansWatcher.on('all', (event, filePath) => {
   if ((event === 'add' || event === 'change' || event === 'unlink') && filePath.endsWith('.md')) {
     lastMetadataRefresh = 0;
     broadcast({ type: 'metadata-update' });
+    if (event === 'change') {
+      const slug = path.basename(filePath, '.md');
+      broadcast({ type: 'plan-update', slug });
+    }
   }
 });
 

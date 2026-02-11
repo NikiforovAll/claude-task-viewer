@@ -3429,6 +3429,10 @@
             debouncedRefresh(data.sessionId, data.type === 'metadata-update');
           }
 
+          if (data.type === 'plan-update') {
+            refreshOpenPlan();
+          }
+
           if (data.type === 'team-update') {
             console.log('[SSE] Team update:', data.teamName);
             debouncedRefresh(data.teamName, false);
@@ -3783,6 +3787,20 @@
     }
 
     let _planSessionId = null;
+
+    function refreshOpenPlan() {
+      if (!_planSessionId || !document.getElementById('plan-modal').classList.contains('visible')) return;
+      fetch(`/api/sessions/${_planSessionId}/plan`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.content) {
+            _pendingPlanContent = data.content;
+            const body = document.getElementById('plan-modal-body');
+            body.innerHTML = DOMPurify.sanitize(marked.parse(_pendingPlanContent));
+          }
+        })
+        .catch(() => {});
+    }
 
     function openPlanForSession(sid) {
       fetch(`/api/sessions/${sid}/plan`).then(r => r.ok ? r.json() : null).catch(() => null)
