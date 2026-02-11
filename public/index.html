@@ -428,6 +428,20 @@
       opacity: 0.7;
     }
 
+    .session-plan {
+      font-size: 10px;
+      color: var(--plan);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .session-plan:hover {
+      text-decoration: underline;
+    }
+
     .session-progress {
       display: flex;
       align-items: center;
@@ -2556,6 +2570,7 @@
             <div class="session-name">${escapeHtml(primaryName)}</div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
             ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
+            ${session.planTitle ? `<div class="session-plan" onclick="event.stopPropagation(); openPlanForSession('${session.id}')" title="View plan">${escapeHtml(session.planTitle)}</div>` : ''}
             <div class="session-progress">
               <span class="session-indicators">
                 ${isTeam ? `<span class="team-badge" title="${memberCount} team members"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${memberCount}</span>` : ''}
