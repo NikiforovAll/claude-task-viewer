@@ -36,6 +36,8 @@
       --warning-dim: rgba(240, 180, 41, 0.18);
       --team: #60a5fa;
       --team-dim: rgba(96, 165, 250, 0.18);
+      --plan: #86a886;
+      --plan-dim: rgba(134, 168, 134, 0.18);
       --mono: 'IBM Plex Mono', monospace;
       --serif: 'Playfair Display', serif;
     }
@@ -1274,6 +1276,26 @@
       border-color: var(--team);
     }
 
+    .plan-indicator {
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--plan-dim);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--plan);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+
+    .plan-indicator:hover {
+      background: var(--plan-dim);
+      border-color: var(--plan);
+    }
+
     /* Task owner badge */
     .task-owner-badge {
       display: inline-flex;
@@ -1375,6 +1397,8 @@
       --success-dim: rgba(26, 138, 90, 0.15);
       --warning: #b07d0a;
       --warning-dim: rgba(176, 125, 10, 0.15);
+      --plan: #5a7a5a;
+      --plan-dim: rgba(90, 122, 90, 0.15);
     }
 
     body.light::before {
@@ -1711,6 +1735,8 @@
         --success-dim: rgba(26, 138, 90, 0.15);
         --warning: #b07d0a;
         --warning-dim: rgba(176, 125, 10, 0.15);
+        --plan: #5a7a5a;
+        --plan-dim: rgba(90, 122, 90, 0.15);
       }
 
       body:not(.dark-forced)::before {
@@ -2444,7 +2470,7 @@
 
       let filteredSessions = sessions;
       if (sessionFilter === 'active') {
-        filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0);
+        filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0 || s.hasPlan);
       }
       if (filterProject) {
         filteredSessions = filteredSessions.filter(s => matchesProjectFilter(s.project));
@@ -2534,6 +2560,7 @@
               <span class="session-indicators">
                 ${isTeam ? `<span class="team-badge" title="${memberCount} team members"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${memberCount}</span>` : ''}
                 ${(isTeam || session.project) ? `<span class="team-info-btn" onclick="event.stopPropagation(); showSessionInfoModal('${session.id}')" title="View session info">ℹ</span>` : ''}
+                ${session.hasPlan ? `<span class="plan-indicator" onclick="event.stopPropagation(); openPlanForSession('${session.id}')" title="View plan"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>` : ''}
                 ${hasInProgress ? '<span class="pulse"></span>' : ''}
               </span>
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
