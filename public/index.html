@@ -1018,6 +1018,32 @@
       animation: pulse 2s ease-in-out infinite;
     }
 
+    .detail-agent {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.03em;
+      background: var(--team-dim);
+      color: var(--team);
+      border: 1px solid var(--team);
+    }
+    .detail-agent.main-agent {
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      border-color: var(--border);
+    }
+    .detail-agent .agent-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
     .detail-box {
       padding: 12px;
       border-radius: 6px;
@@ -1316,6 +1342,37 @@
       border-radius: 4px;
       text-transform: none;
       letter-spacing: 0;
+    }
+
+    /* Subagent badge shown on task cards */
+    .task-agent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 7px;
+      border-radius: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      margin-top: 5px;
+    }
+    .task-agent-badge .agent-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--in-progress);
+      flex-shrink: 0;
+    }
+    .task-agent-badge.main-agent {
+      opacity: 0.6;
+    }
+    .task-agent-badge.main-agent .agent-dot {
+      background: var(--text-muted);
+    }
+    .task-agent-badge .agent-model {
+      opacity: 0.7;
     }
 
     /* Team modal member card */
@@ -2643,6 +2700,23 @@
       renderSessions();
     }
 
+    function shortModelName(model) {
+      if (!model) return null;
+      // "claude-sonnet-4-6" → "sonnet-4-6", "claude-opus-4-6" → "opus-4-6"
+      return model.replace(/^claude-/, '');
+    }
+
+    function renderAgentBadge(task) {
+      if (!task.subagentType && !task.model) return '';
+      const model = shortModelName(task.model);
+      const isMain = task.subagentType === 'main agent';
+      return `<div class="task-agent-badge${isMain ? ' main-agent' : ''}">
+        <span class="agent-dot"></span>
+        ${task.subagentType ? `<span>${escapeHtml(task.subagentType)}</span>` : ''}
+        ${model ? `<span class="agent-model">${escapeHtml(model)}</span>` : ''}
+      </div>`;
+    }
+
     function renderTaskCard(task) {
       const isBlocked = task.blockedBy && task.blockedBy.length > 0;
       const taskId = viewMode === 'all' ? `${task.sessionId?.slice(0,4)}-${task.id}` : task.id;
@@ -2669,6 +2743,7 @@
           ${task.status === 'in_progress' && task.activeForm ? `<div class="task-active">${escapeHtml(task.activeForm)}</div>` : ''}
           ${isBlocked ? `<div class="task-blocked">Waiting on ${task.blockedBy.map(id => '#' + id).join(', ')}</div>` : ''}
           ${task.description ? `<div class="task-desc">${escapeHtml(task.description.split('\n')[0])}</div>` : ''}
+          ${renderAgentBadge(task)}
         </div>
       `;
     }
@@ -2923,11 +2998,22 @@
           <h2 class="detail-title">${escapeHtml(task.subject)}</h2>
         </div>
 
-        <div class="detail-section" style="display: flex; gap: 12px; align-items: center;">
+        <div class="detail-section" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
           <div>${statusLabels[task.status] || ''}</div>
           ${task.owner ? `<div style="font-size: 13px; color: ${getOwnerColor(task.owner).color}; font-weight: 500;">${escapeHtml(task.owner)}</div>` : ''}
           ${isBlocked && task.status !== 'in_progress' ? '<div style="font-size: 10px; color: var(--warning);">Blocked</div>' : ''}
         </div>
+
+        ${(task.subagentType || task.model) ? `
+        <div class="detail-section">
+          <div class="detail-label">Agent</div>
+          ${(() => {
+            const isMain = task.subagentType === 'main agent';
+            const model = task.model ? task.model.replace(/^claude-/, '') : null;
+            const label = [task.subagentType, model].filter(Boolean).join(' · ');
+            return `<span class="detail-agent${isMain ? ' main-agent' : ''}"><span class="agent-dot"></span>${escapeHtml(label)}</span>`;
+          })()}
+        </div>` : ''}
 
         <div class="detail-section">
           <div class="detail-label">Description</div>
