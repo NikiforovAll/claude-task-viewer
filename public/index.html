@@ -258,6 +258,31 @@
       height: 32px;
     }
 
+    .remaining-filter-btn {
+      flex-shrink: 0;
+      height: 32px;
+      padding: 0 9px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .remaining-filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .remaining-filter-btn.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     .filter-dropdown {
       flex: 1;
       appearance: none;
@@ -1964,6 +1989,7 @@
           </select>
         </div>
         <div class="filter-row">
+          <button id="remaining-filter-btn" class="remaining-filter-btn" onclick="toggleRemainingFilter()" title="Show only sessions with remaining tasks" aria-label="Filter sessions with remaining tasks">—</button>
           <select id="session-limit" class="filter-dropdown" onchange="changeSessionLimit(this.value)" aria-label="Number of sessions to show">
             <option value="10">Show 10</option>
             <option value="20">Show 20</option>
@@ -2095,7 +2121,8 @@
     let viewMode = 'session';
     let sessionFilter = 'active';
     let sessionLimit = '20';
-    let filterProject = '__recent__'; // null = all, '__recent__' = last 24h, or project path
+    let filterProject = '__recent__';
+    let filterWithRemaining = false; // show only sessions with pending/in-progress tasks
     let recentProjects = new Set();
     let searchQuery = ''; // Search query for fuzzy search
     let allTasksCache = []; // Cache all tasks for search
@@ -2139,6 +2166,7 @@
       sessionLimit = '20';
       filterProject = '__recent__';
       ownerFilter = '';
+      filterWithRemaining = false;
       searchQuery = '';
       viewMode = 'all';
       currentSessionId = null;
@@ -2532,11 +2560,28 @@
       renderKanban();
     }
 
+    function toggleRemainingFilter() {
+      filterWithRemaining = !filterWithRemaining;
+      renderSessions();
+    }
+
     function renderSessions() {
       // Update project dropdown
       updateProjectDropdown();
 
+      // Count sessions with remaining tasks (across all sessions, before other filters)
+      const withRemaining = sessions.filter(s => s.pending > 0 || s.inProgress > 0).length;
+      const btn = document.getElementById('remaining-filter-btn');
+      if (btn) {
+        btn.textContent = `${withRemaining}/${sessions.length}`;
+        btn.classList.toggle('active', filterWithRemaining);
+        btn.title = filterWithRemaining ? 'Showing sessions with remaining tasks (click to show all)' : 'Show only sessions with remaining tasks';
+      }
+
       let filteredSessions = sessions;
+      if (filterWithRemaining) {
+        filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0);
+      }
       if (sessionFilter === 'active') {
         filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0 || s.hasPlan);
       }
