@@ -40,6 +40,147 @@ function isTeamSession(sessionId) {
 const teamConfigCache = new Map();
 const TEAM_CACHE_TTL = 5000;
 
+const subagentMapCache = new Map();
+
+/**
+ * Parse orchestrator JSONL to build a map of taskId -> {subagentType, model}.
+ * Correlates TaskCreate/Task tool calls and reads subagent JSONL files for model info.
+ */
+const EMPTY_SUBAGENT_RESULT = { subjectAgentMap: {}, orchestratorModel: null };
+
+function loadSessionSubagentMap(jsonlPath) {
+  if (!jsonlPath || !existsSync(jsonlPath)) return EMPTY_SUBAGENT_RESULT;
+
+  try {
+    const mtime = statSync(jsonlPath).mtime.getTime();
+    const cached = subagentMapCache.get(jsonlPath);
+    if (cached && cached.mtime === mtime) return cached.data;
+  } catch (e) { return { subjectAgentMap: {}, orchestratorModel: null }; }
+
+  try {
+    const content = readFileSync(jsonlPath, 'utf8');
+    const lines = content.split('\n').filter(Boolean);
+
+    const taskCreateSubjects = []; // subjects from TaskCreate calls, in order
+    const taskToolCalls = []; // {toolUseId, subagentType, description}
+    const toolResults = {}; // toolUseId -> agentId
+    let orchestratorModel = null; // model used by the orchestrator session itself
+
+    for (const line of lines) {
+      try {
+        const d = JSON.parse(line);
+        const msgContent = Array.isArray(d.message?.content) ? d.message.content : [];
+
+        // Capture orchestrator model from the first assistant message
+        if (!orchestratorModel && d.message?.model && !d.isSidechain) {
+          orchestratorModel = d.message.model;
+        }
+
+        for (const c of msgContent) {
+          if (!c || typeof c !== 'object') continue;
+
+          if (c.type === 'tool_use') {
+            if (c.name === 'TaskCreate' && c.input?.subject) {
+              taskCreateSubjects.push(c.input.subject);
+            }
+            if (c.name === 'Task' && c.input?.subagent_type) {
+              taskToolCalls.push({
+                toolUseId: c.id,
+                subagentType: c.input.subagent_type,
+                description: c.input.description || ''
+              });
+            }
+          }
+
+          if (c.type === 'tool_result' && c.tool_use_id) {
+            const text = Array.isArray(c.content)
+              ? c.content.map(x => x.text || '').join('')
+              : String(c.content || '');
+            const m = text.match(/agentId:\s*(\S+)/);
+            if (m) toolResults[c.tool_use_id] = m[1];
+          }
+        }
+      } catch (e) { /* skip malformed lines */ }
+    }
+
+    // Build agentId -> {subagentType, description}
+    const agentInfo = {};
+    for (const tc of taskToolCalls) {
+      const agentId = toolResults[tc.toolUseId];
+      if (agentId) {
+        agentInfo[agentId] = { subagentType: tc.subagentType, description: tc.description };
+      }
+    }
+
+    // Read model from subagent JSONL (second line = first assistant message)
+    const subagentsDir = path.join(
+      path.dirname(jsonlPath),
+      path.basename(jsonlPath, '.jsonl'),
+      'subagents'
+    );
+    if (existsSync(subagentsDir)) {
+      for (const sf of readdirSync(subagentsDir).filter(f => f.endsWith('.jsonl'))) {
+        const agentId = sf.replace('agent-', '').replace('.jsonl', '');
+        if (!agentInfo[agentId]) continue;
+        try {
+          const fd = require('fs').openSync(path.join(subagentsDir, sf), 'r');
+          const buf = Buffer.alloc(16384);
+          const bytesRead = require('fs').readSync(fd, buf, 0, 16384, 0);
+          require('fs').closeSync(fd);
+          for (const fl of buf.toString('utf8', 0, bytesRead).split('\n')) {
+            try {
+              const entry = JSON.parse(fl);
+              const model = entry.message?.model;
+              if (model) { agentInfo[agentId].model = model; break; }
+            } catch (e) { /* skip */ }
+          }
+        } catch (e) { /* skip unreadable files */ }
+      }
+    }
+
+    // Build subject->agent map by matching Task description words against TaskCreate subjects
+    // Returns {normalizedSubject -> {subagentType, model}} for use in task enrichment
+    function wordSet(str) {
+      return new Set(str.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2));
+    }
+
+    const subjectAgentMap = {};
+    for (const [agentId, info] of Object.entries(agentInfo)) {
+      const descWords = wordSet(info.description);
+      if (descWords.size === 0) continue;
+
+      let bestSubject = null;
+      let bestScore = 0;
+      for (const subject of taskCreateSubjects) {
+        const subjectWords = wordSet(subject);
+        let matches = 0;
+        for (const w of descWords) { if (subjectWords.has(w)) matches++; }
+        const score = matches / descWords.size;
+        if (score > bestScore && score > 0.5) { bestScore = score; bestSubject = subject; }
+      }
+
+      if (bestSubject) {
+        subjectAgentMap[bestSubject] = {
+          subagentType: info.subagentType,
+          model: info.model || null
+        };
+      }
+    }
+
+    const result = { subjectAgentMap, orchestratorModel };
+
+    try {
+      const mtime = statSync(jsonlPath).mtime.getTime();
+      subagentMapCache.set(jsonlPath, { data: result, mtime });
+    } catch (e) { /* skip caching if stat fails */ }
+
+    return result;
+  } catch (e) {
+    console.error('Error loading subagent map:', e);
+    return { subjectAgentMap: {}, orchestratorModel: null };
+  }
+}
+
 function loadTeamConfig(teamName) {
   const cached = teamConfigCache.get(teamName);
   if (cached && Date.now() - cached.ts < TEAM_CACHE_TTL) return cached.data;
@@ -424,6 +565,46 @@ app.get('/api/sessions/:sessionId', async (req, res) => {
 
     // Sort by ID (numeric)
     tasks.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+
+    // Enrich tasks with subagent info from JSONL (matched by subject word overlap)
+    const metadata = loadSessionMetadata();
+    const jsonlPath = metadata[req.params.sessionId]?.jsonlPath;
+    if (jsonlPath) {
+      const { subjectAgentMap, orchestratorModel } = loadSessionSubagentMap(jsonlPath);
+
+      function wordSetEnrich(str) {
+        return new Set(str.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2));
+      }
+
+      for (const task of tasks) {
+        // Try to match to a subagent via description word overlap
+        if (Object.keys(subjectAgentMap).length > 0) {
+          const taskWords = wordSetEnrich(task.subject || '');
+          let bestInfo = null, bestScore = 0;
+          for (const [subject, info] of Object.entries(subjectAgentMap)) {
+            const subjectWords = wordSetEnrich(subject);
+            let matches = 0;
+            for (const w of subjectWords) { if (taskWords.has(w)) matches++; }
+            const score = subjectWords.size > 0 ? matches / subjectWords.size : 0;
+            if (score > bestScore && score > 0.5) { bestScore = score; bestInfo = info; }
+          }
+          if (bestInfo) {
+            task.subagentType = bestInfo.subagentType;
+            task.model = bestInfo.model;
+            continue;
+          }
+        }
+
+        // Fallback: orchestrator is handling this task directly
+        task.subagentType = 'main agent';
+        if (orchestratorModel) task.model = orchestratorModel;
+      }
+    } else {
+      // No JSONL found — label everything as main agent
+      for (const task of tasks) {
+        task.subagentType = 'main agent';
+      }
+    }
 
     res.json(tasks);
   } catch (error) {
