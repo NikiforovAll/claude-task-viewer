@@ -294,6 +294,7 @@ app.get('/api/sessions', async (req, res) => {
             try {
               const taskPath = path.join(sessionPath, file);
               const task = JSON.parse(readFileSync(taskPath, 'utf8'));
+              if (task.metadata && task.metadata._internal) continue;
               if (task.status === 'completed') completed++;
               else if (task.status === 'in_progress') inProgress++;
               else pending++;

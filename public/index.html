@@ -2361,7 +2361,7 @@
       try {
         const res = await fetch('/api/tasks/all');
         const allTasks = await res.json();
-        let activeTasks = allTasks.filter(t => t.status === 'in_progress');
+        let activeTasks = allTasks.filter(t => t.status === 'in_progress' && !isInternalTask(t));
         if (filterProject) {
           activeTasks = activeTasks.filter(t => matchesProjectFilter(t.project));
         }
@@ -2457,8 +2457,9 @@
       sessionView.classList.add('visible');
       document.getElementById('owner-filter-bar').classList.remove('visible');
 
-      const totalTasks = currentTasks.length;
-      const completed = currentTasks.filter(t => t.status === 'completed').length;
+      const visibleTasks = currentTasks.filter(t => !isInternalTask(t));
+      const totalTasks = visibleTasks.length;
+      const completed = visibleTasks.filter(t => t.status === 'completed').length;
       const percent = totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0;
 
       const isFiltered = filterProject && filterProject !== '__recent__';
@@ -2674,7 +2675,7 @@
     }
 
     function renderKanban() {
-      let filtered = currentTasks;
+      let filtered = currentTasks.filter(t => !isInternalTask(t));
       if (ownerFilter) {
         filtered = filtered.filter(t => t.owner === ownerFilter);
       }
@@ -3474,6 +3475,10 @@
       { bg: 'rgba(99, 102, 241, 0.14)', color: '#4f46e5' },  // indigo
     ];
     const ownerColorCache = {};
+    function isInternalTask(task) {
+      return task.metadata && task.metadata._internal === true;
+    }
+
     function getOwnerColor(name) {
       if (ownerColorCache[name]) return ownerColorCache[name];
       let hash = 5381;
@@ -3669,7 +3674,13 @@
 
       await Promise.all(promises);
 
-      const tasks = currentSessionId === sessionId ? currentTasks : [];
+      let tasks = currentSessionId === sessionId ? currentTasks : [];
+      if (tasks.length === 0) {
+        try {
+          const r = await fetch(`/api/sessions/${sessionId}`);
+          if (r.ok) tasks = await r.json();
+        } catch {}
+      }
       _planSessionId = sessionId;
       showInfoModal(session, teamConfig, tasks, planContent);
     }
@@ -3727,8 +3738,13 @@
       // Team info section
       if (teamConfig) {
         const ownerCounts = {};
+        const memberDescriptions = {};
         tasks.forEach(t => {
-          if (t.owner) ownerCounts[t.owner] = (ownerCounts[t.owner] || 0) + 1;
+          if (isInternalTask(t) && t.subject) {
+            memberDescriptions[t.subject] = t.description;
+          } else if (t.owner) {
+            ownerCounts[t.owner] = (ownerCounts[t.owner] || 0) + 1;
+          }
         });
 
         const members = teamConfig.members || [];
@@ -3743,11 +3759,13 @@
 
         members.forEach(member => {
           const taskCount = ownerCounts[member.name] || 0;
+          const memberDesc = memberDescriptions[member.name];
           html += `
             <div class="team-member-card">
               <div class="member-name">🟢 ${escapeHtml(member.name)}</div>
               <div class="member-detail">Role: ${escapeHtml(member.agentType || 'unknown')}</div>
               ${member.model ? `<div class="member-detail">Model: ${escapeHtml(member.model)}</div>` : ''}
+              ${memberDesc ? `<div class="member-detail" style="margin-top: 4px; font-style: italic; color: var(--text-secondary);">${escapeHtml(memberDesc.split('\n')[0])}</div>` : ''}
               <div class="member-tasks">Tasks: ${taskCount} assigned</div>
             </div>
           `;
@@ -3850,7 +3868,7 @@
       }
 
       bar.classList.add('visible');
-      const owners = [...new Set(currentTasks.map(t => t.owner).filter(Boolean))].sort();
+      const owners = [...new Set(currentTasks.filter(t => !isInternalTask(t)).map(t => t.owner).filter(Boolean))].sort();
       select.innerHTML = '<option value="">All Members</option>' +
         owners.map(o => {
           const c = getOwnerColor(o);
