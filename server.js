@@ -8,6 +8,15 @@ const readline = require('readline');
 const chokidar = require('chokidar');
 const os = require('os');
 
+const isSetupCommand = process.argv.includes('--install') || process.argv.includes('--uninstall');
+
+if (isSetupCommand) {
+  const { runInstall, runUninstall } = require('./install');
+  (process.argv.includes('--install') ? runInstall() : runUninstall())
+    .then(() => process.exit(0))
+    .catch(e => { console.error(e.message); process.exit(1); });
+}
+
 const app = express();
 const PORT = process.env.PORT || 3456;
 
@@ -32,6 +41,7 @@ const TASKS_DIR = path.join(CLAUDE_DIR, 'tasks');
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 const TEAMS_DIR = path.join(CLAUDE_DIR, 'teams');
 const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
+const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
 
 function isTeamSession(sessionId) {
   return existsSync(path.join(TEAMS_DIR, sessionId, 'config.json'));
@@ -219,13 +229,15 @@ function loadSessionMetadata() {
           const project = parentMeta?.project || leadMember?.cwd || teamConfig.working_dir || null;
 
           metadata[dir.name] = {
-            customTitle: parentMeta?.customTitle || null,
-            slug: parentMeta?.slug || null,
+            customTitle: teamConfig.description || dir.name,
+            slug: null,
             project,
             jsonlPath: parentMeta?.jsonlPath || null,
-            description: parentMeta?.description || teamConfig.description || null,
+            description: teamConfig.description || parentMeta?.description || null,
             gitBranch: parentMeta?.gitBranch || null,
-            created: parentMeta?.created || null
+            created: parentMeta?.created || null,
+            isTeamLeader: false,
+            teamLeaderId: teamConfig.leadSessionId || null
           };
         }
       }
@@ -368,6 +380,21 @@ app.get('/api/sessions', async (req, res) => {
       }
     }
 
+    // Hide leader UUID sessions that are represented by a team session
+    const teamLeaderIds = new Set();
+    for (const [sid, session] of sessionsMap) {
+      if (session.isTeam) {
+        const cfg = loadTeamConfig(sid);
+        if (cfg?.leadSessionId) teamLeaderIds.add(cfg.leadSessionId);
+      }
+    }
+    for (const leaderId of teamLeaderIds) {
+      const session = sessionsMap.get(leaderId);
+      if (session && session.taskCount === 0) {
+        sessionsMap.delete(leaderId);
+      }
+    }
+
     // Convert map to array and sort by most recently modified
     let sessions = Array.from(sessionsMap.values());
     sessions.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
@@ -477,6 +504,30 @@ app.get('/api/teams/:name', (req, res) => {
   const config = loadTeamConfig(req.params.name);
   if (!config) return res.status(404).json({ error: 'Team not found' });
   res.json(config);
+});
+
+// API: Get agents for a session
+app.get('/api/sessions/:sessionId/agents', (req, res) => {
+  let sessionId = req.params.sessionId;
+  // For team sessions, resolve to leader's session UUID
+  const teamConfig = loadTeamConfig(sessionId);
+  if (teamConfig && teamConfig.leadSessionId) {
+    sessionId = teamConfig.leadSessionId;
+  }
+  const agentDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
+  if (!existsSync(agentDir)) return res.json([]);
+  try {
+    const files = readdirSync(agentDir).filter(f => f.endsWith('.json'));
+    const agents = [];
+    for (const file of files) {
+      try {
+        agents.push(JSON.parse(readFileSync(path.join(agentDir, file), 'utf8')));
+      } catch (e) { /* skip invalid */ }
+    }
+    res.json(agents);
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 app.get('/api/version', (req, res) => {
@@ -641,6 +692,13 @@ function broadcast(data) {
   }
 }
 
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// File watchers and server startup (skip for --install/--uninstall)
+if (!isSetupCommand) {
+
 // Watch for file changes (chokidar handles non-existent paths)
 const watcher = chokidar.watch(TASKS_DIR, {
   persistent: true,
@@ -714,32 +772,76 @@ plansWatcher.on('all', (event, filePath) => {
   }
 });
 
-app.use('/api', (req, res) => {
-  res.status(404).json({ error: 'Not found' });
+// Watch agent-activity directory for subagent lifecycle events
+const agentActivityWatcher = chokidar.watch(AGENT_ACTIVITY_DIR, {
+  persistent: true,
+  ignoreInitial: true,
+  depth: 2
 });
 
-// Start server
+const AGENT_FILE_CAP = 20;
+
+agentActivityWatcher.on('all', (event, filePath) => {
+  if ((event === 'add' || event === 'change') && filePath.endsWith('.json')) {
+    const relativePath = path.relative(AGENT_ACTIVITY_DIR, filePath);
+    const sessionId = relativePath.split(path.sep)[0];
+    // Cleanup: if session dir exceeds cap, delete oldest files by mtime
+    if (event === 'add') {
+      try {
+        const sessionDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
+        const files = readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+        if (files.length > AGENT_FILE_CAP) {
+          const withStats = files.map(f => {
+            const fp = path.join(sessionDir, f);
+            return { file: fp, mtime: statSync(fp).mtimeMs };
+          }).sort((a, b) => a.mtime - b.mtime);
+          const toDelete = withStats.slice(0, files.length - AGENT_FILE_CAP);
+          for (const { file } of toDelete) {
+            fs.unlink(file).catch(() => {});
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+    broadcast({ type: 'agent-update', sessionId });
+    // For team sessions, also broadcast with team name so frontend picks it up
+    if (existsSync(TEAMS_DIR)) {
+      try {
+        const teamDirs = readdirSync(TEAMS_DIR, { withFileTypes: true }).filter(d => d.isDirectory());
+        for (const td of teamDirs) {
+          const cfg = loadTeamConfig(td.name);
+          if (cfg && cfg.leadSessionId === sessionId) {
+            broadcast({ type: 'agent-update', sessionId: td.name });
+            break;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+});
+
 const server = app.listen(PORT, () => {
-  const actualPort = server.address().port;
-  console.log(`Claude Task Viewer running at http://localhost:${actualPort}`);
+    const actualPort = server.address().port;
+    console.log(`Claude Task Viewer running at http://localhost:${actualPort}`);
 
-  if (process.argv.includes('--open')) {
-    import('open').then(open => open.default(`http://localhost:${actualPort}`));
-  }
-});
+    if (process.argv.includes('--open')) {
+      import('open').then(open => open.default(`http://localhost:${actualPort}`));
+    }
+  });
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.log(`Port ${PORT} in use, trying random port...`);
-    const fallback = app.listen(0, () => {
-      const actualPort = fallback.address().port;
-      console.log(`Claude Task Viewer running at http://localhost:${actualPort}`);
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${PORT} in use, trying random port...`);
+      const fallback = app.listen(0, () => {
+        const actualPort = fallback.address().port;
+        console.log(`Claude Task Viewer running at http://localhost:${actualPort}`);
 
-      if (process.argv.includes('--open')) {
-        import('open').then(open => open.default(`http://localhost:${actualPort}`));
-      }
-    });
-  } else {
-    throw err;
-  }
-});
+        if (process.argv.includes('--open')) {
+          import('open').then(open => open.default(`http://localhost:${actualPort}`));
+        }
+      });
+    } else {
+      throw err;
+    }
+  });
+
+} // end if (!isSetupCommand)

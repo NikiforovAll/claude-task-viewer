@@ -40,6 +40,8 @@
   },
   "files": [
     "server.js",
+    "install.js",
+    "hooks/agent-spy.sh",
     "public/**/*"
   ]
 }
