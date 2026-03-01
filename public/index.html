@@ -2660,7 +2660,7 @@
           : `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(agent.lastMessage.trim())}</pre>`;
         html += `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
           <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Last Message</div>
-          <div class="detail-desc" style="font-size:13px;max-height:300px;overflow-y:auto;">${sanitized}</div>
+          <div class="detail-desc" style="font-size:13px;">${sanitized}</div>
         </div>`;
       }
 
@@ -4423,8 +4423,8 @@
     </div>
   </div>
 
-  <div id="agent-modal" class="modal-overlay" onclick="closeAgentModal()">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 520px;">
+  <div id="agent-modal" class="modal-overlay plan-modal-overlay" onclick="closeAgentModal()">
+    <div class="modal plan-modal" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 id="agent-modal-title" class="modal-title">Agent</h3>
         <button class="modal-close" aria-label="Close dialog" onclick="closeAgentModal()">
@@ -4433,7 +4433,7 @@
           </svg>
         </button>
       </div>
-      <div id="agent-modal-body" class="modal-body"></div>
+      <div id="agent-modal-body" class="modal-body" style="overflow-y: auto; flex: 1;"></div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeAgentModal()">Close</button>
       </div>
