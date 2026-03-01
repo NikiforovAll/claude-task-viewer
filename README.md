@@ -35,6 +35,24 @@ npm install -g claude-code-kanban
 claude-code-kanban --open
 ```
 
+## Agent Log (subagent tracking)
+
+The Kanban footer can show live subagent activity (start/stop/idle) when hooks are installed. A one-time setup installs a lightweight shell script and adds hook entries to `~/.claude/settings.json`.
+
+```bash
+npx claude-code-kanban --install
+```
+
+This will:
+1. Copy `agent-spy.sh` to `~/.claude/hooks/` (requires `jq`)
+2. Add `SubagentStart`, `SubagentStop`, and `TeammateIdle` hooks to settings.json
+
+All changes are non-destructive — existing settings are preserved. To remove:
+
+```bash
+npx claude-code-kanban --uninstall
+```
+
 ## Configuration
 
 ```bash

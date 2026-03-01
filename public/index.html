@@ -1389,6 +1389,72 @@
       padding: 6px 10px;
     }
 
+    /* Agent footer panel */
+    .agent-footer {
+      display: none;
+      flex-direction: column;
+      border-top: 1px solid var(--border);
+      background: var(--bg-surface);
+    }
+    .agent-footer.visible { display: flex; }
+    .agent-footer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 24px;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text-tertiary);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .agent-footer-header:hover { background: var(--bg-hover); }
+    .agent-footer-toggle {
+      background: none; border: none; color: var(--text-tertiary);
+      cursor: pointer; font-size: 14px; padding: 2px 4px;
+    }
+    .agent-footer-content {
+      display: flex;
+      gap: 10px;
+      padding: 0 24px 12px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .agent-footer.collapsed .agent-footer-content { display: none; }
+    .agent-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      white-space: nowrap;
+      min-width: 0;
+      overflow: hidden;
+      transition: opacity 0.3s;
+      cursor: pointer;
+    }
+    .agent-card:hover { border-color: var(--accent); }
+    .agent-card.fading { opacity: 0.4; }
+    .agent-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .agent-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .agent-dot.idle { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+    .agent-dot.stopped { background: var(--text-muted); }
+    .agent-type {
+      font-size: 13px; font-weight: 500; color: var(--text-primary);
+    }
+    .agent-status {
+      font-size: 11px; color: var(--text-tertiary);
+    }
+    .agent-message {
+      font-size: 11px; color: var(--text-muted);
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
     /* Light mode */
     body.light {
       --bg-deep: #e8e6e3;
@@ -2004,6 +2070,13 @@
             <div id="completed-tasks" class="column-tasks" role="list"></div>
           </div>
         </div>
+        <div id="agent-footer" class="agent-footer">
+          <div class="agent-footer-header" onclick="toggleAgentFooter()">
+            <span id="agent-footer-label">Agents</span>
+            <button class="agent-footer-toggle" id="agent-footer-toggle" aria-label="Toggle agent panel">&#x25BE;</button>
+          </div>
+          <div class="agent-footer-content" id="agent-footer-content"></div>
+        </div>
       </div>
     </main>
 
@@ -2042,6 +2115,9 @@
     let allTasksCache = []; // Cache all tasks for search
     let bulkDeleteSessionId = null; // Track session for bulk delete
     let ownerFilter = '';
+    let currentAgents = [];
+    let lastAgentsHash = '';
+    let agentDurationInterval = null;
     let selectedTaskId = null;
     let selectedSessionId = null;
     let focusZone = 'board'; // 'board' | 'sidebar'
@@ -2423,6 +2499,7 @@
         ownerFilter = '';
         updateUrl();
         renderSession();
+        fetchAgents(sessionId);
       } catch (error) {
         console.error('Failed to fetch tasks:', error);
         currentTasks = [];
@@ -2433,11 +2510,182 @@
       }
     }
 
+    const AGENT_COOLDOWN_MS = 3 * 60 * 1000;
+    const AGENT_STALE_MS = 5 * 60 * 1000;
+    const AGENT_LOG_MAX = 8;
+
+    async function fetchAgents(sessionId) {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/agents`);
+        if (!res.ok) { currentAgents = []; renderAgentFooter(); return; }
+        const agents = await res.json();
+        const hash = JSON.stringify(agents);
+        if (hash === lastAgentsHash) return;
+        lastAgentsHash = hash;
+        currentAgents = agents;
+        renderAgentFooter();
+      } catch (e) {
+        console.error('[fetchAgents]', e);
+      }
+    }
+
+    function formatDuration(ms) {
+      const s = Math.floor(ms / 1000);
+      if (s < 60) return `${s}s`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}m ${s % 60}s`;
+      return `${Math.floor(m / 60)}h ${m % 60}m`;
+    }
+
+    function renderAgentFooter() {
+      const footer = document.getElementById('agent-footer');
+      const content = document.getElementById('agent-footer-content');
+      const label = document.getElementById('agent-footer-label');
+      const now = Date.now();
+
+      // Mark stale "active" agents as stopped (SubagentStop unreliable for shutdown agents)
+      const agents = currentAgents.map(a => {
+        if (a.status === 'active' && a.startedAt && (now - new Date(a.startedAt).getTime()) > AGENT_STALE_MS) {
+          return { ...a, status: 'stopped', stoppedAt: a.updatedAt };
+        }
+        return a;
+      });
+      // Filter shutdown ghosts: for same-type agents, keep if they overlapped (parallel)
+      // or started >30s after previous stopped (legitimate re-spawn). Filter the rest.
+      const byType = {};
+      for (const a of agents) { (byType[a.type] = byType[a.type] || []).push(a); }
+      const filtered = [];
+      for (const group of Object.values(byType)) {
+        group.sort((a, b) => new Date(a.startedAt || 0) - new Date(b.startedAt || 0));
+        filtered.push(group[0]);
+        for (let i = 1; i < group.length; i++) {
+          const prev = group[i - 1];
+          const prevStop = prev.stoppedAt ? new Date(prev.stoppedAt).getTime() : Infinity;
+          const curStart = new Date(group[i].startedAt || 0).getTime();
+          const overlapped = curStart < prevStop;
+          const reSpawn = curStart - prevStop > 30000;
+          if (overlapped || reSpawn) filtered.push(group[i]);
+        }
+      }
+      // Sort by updatedAt desc, keep up to 7 most recent
+      const visible = filtered
+        .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+        .slice(0, AGENT_LOG_MAX);
+
+      if (visible.length === 0) {
+        footer.classList.remove('visible');
+        clearInterval(agentDurationInterval);
+        agentDurationInterval = null;
+        return;
+      }
+
+      footer.classList.add('visible');
+      label.textContent = `Agents Log (${visible.length})`;
+
+      const collapsed = localStorage.getItem('agentFooterCollapsed') === 'true';
+      footer.classList.toggle('collapsed', collapsed);
+      document.getElementById('agent-footer-toggle').innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;';
+
+      content.innerHTML = visible.map(a => {
+        const elapsed = a.status === 'stopped' && a.stoppedAt
+          ? new Date(a.stoppedAt).getTime() - new Date(a.startedAt || a.stoppedAt).getTime()
+          : now - new Date(a.startedAt || a.updatedAt).getTime();
+        const statusText = a.status === 'stopped'
+          ? `stopped · ${formatDuration(elapsed)}`
+          : a.status === 'idle'
+          ? `idle · ${formatDuration(elapsed)}`
+          : `active · ${formatDuration(elapsed)}`;
+        const msgTrimmed = a.lastMessage?.trim() || '';
+        const msgTrunc = msgTrimmed.length > 60 ? msgTrimmed.substring(0, 60) + '…' : msgTrimmed;
+        const msgHtml = msgTrunc
+          ? `<div class="agent-message" title="${escapeHtml(msgTrimmed)}">${escapeHtml(msgTrunc)}</div>` : '';
+        return `<div class="agent-card" onclick="showAgentModal('${a.agentId}')">
+          <span class="agent-dot ${a.status}"></span>
+          <div>
+            <div class="agent-type">${escapeHtml(a.type || 'unknown')}</div>
+            <div class="agent-status">${statusText}</div>
+            ${msgHtml}
+          </div>
+        </div>`;
+      }).join('');
+
+      clearInterval(agentDurationInterval);
+      if (visible.some(a => a.status === 'active' || a.status === 'idle')) {
+        agentDurationInterval = setInterval(() => renderAgentFooter(), 1000);
+      } else {
+        agentDurationInterval = setInterval(() => renderAgentFooter(), 10000);
+      }
+    }
+
+    function toggleAgentFooter() {
+      const footer = document.getElementById('agent-footer');
+      const collapsed = !footer.classList.contains('collapsed');
+      footer.classList.toggle('collapsed', collapsed);
+      localStorage.setItem('agentFooterCollapsed', collapsed);
+      document.getElementById('agent-footer-toggle').innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;';
+    }
+
+    function showAgentModal(agentId) {
+      const agent = currentAgents.find(a => a.agentId === agentId);
+      if (!agent) return;
+      const modal = document.getElementById('agent-modal');
+      const title = document.getElementById('agent-modal-title');
+      const body = document.getElementById('agent-modal-body');
+      const now = Date.now();
+      const started = agent.startedAt ? new Date(agent.startedAt) : null;
+      const stopped = agent.stoppedAt ? new Date(agent.stoppedAt) : null;
+      const elapsed = stopped && started
+        ? stopped.getTime() - started.getTime()
+        : started ? now - started.getTime() : 0;
+
+      const statusDot = `<span class="agent-dot ${agent.status}" style="display:inline-block;vertical-align:middle;margin-right:6px;"></span>`;
+      title.innerHTML = `${statusDot} ${escapeHtml(agent.type || 'unknown')}`;
+
+      const rows = [
+        ['Status', agent.status],
+        ['Agent ID', `<code style="font-size:12px;color:var(--text-tertiary)">${escapeHtml(agent.agentId)}</code>`],
+        ['Duration', formatDuration(elapsed)],
+      ];
+      if (started) rows.push(['Started', started.toLocaleTimeString()]);
+      if (stopped) rows.push(['Stopped', stopped.toLocaleTimeString()]);
+
+      let html = `<table style="width:100%;border-collapse:collapse;">` +
+        rows.map(([k, v]) =>
+          `<tr><td style="padding:6px 12px 6px 0;color:var(--text-tertiary);white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:6px 0;color:var(--text-primary);">${v}</td></tr>`
+        ).join('') + `</table>`;
+
+      if (agent.lastMessage) {
+        const sanitized = typeof DOMPurify !== 'undefined' && typeof marked !== 'undefined'
+          ? DOMPurify.sanitize(marked.parse(agent.lastMessage.trim()))
+          : `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(agent.lastMessage.trim())}</pre>`;
+        html += `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Last Message</div>
+          <div class="detail-desc" style="font-size:13px;max-height:300px;overflow-y:auto;">${sanitized}</div>
+        </div>`;
+      }
+
+      body.innerHTML = html;
+      modal.classList.add('visible');
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeAgentModal();
+          document.removeEventListener('keydown', keyHandler);
+        }
+      };
+      document.addEventListener('keydown', keyHandler);
+    }
+
+    function closeAgentModal() {
+      document.getElementById('agent-modal').classList.remove('visible');
+    }
+
     async function showAllTasks() {
       try {
         viewMode = 'all';
         currentSessionId = null;
         ownerFilter = '';
+        currentAgents = []; lastAgentsHash = ''; renderAgentFooter();
         const res = await fetch('/api/tasks/all');
         let tasks = await res.json();
         if (filterProject) {
@@ -3434,6 +3682,12 @@
             refreshOpenPlan();
           }
 
+          if (data.type === 'agent-update') {
+            if (currentSessionId && data.sessionId === currentSessionId) {
+              fetchAgents(currentSessionId);
+            }
+          }
+
           if (data.type === 'team-update') {
             console.log('[SSE] Team update:', data.teamName);
             debouncedRefresh(data.teamName, false);
@@ -4165,6 +4419,23 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeBlockedTaskModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="agent-modal" class="modal-overlay" onclick="closeAgentModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 id="agent-modal-title" class="modal-title">Agent</h3>
+        <button class="modal-close" aria-label="Close dialog" onclick="closeAgentModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div id="agent-modal-body" class="modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeAgentModal()">Close</button>
       </div>
     </div>
   </div>
