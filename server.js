@@ -77,6 +77,19 @@ function checkActiveAgents(sessionId) {
   return false;
 }
 
+function checkRunningAgents(agentDir) {
+  if (!existsSync(agentDir)) return false;
+  try {
+    for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
+      try {
+        const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
+        if (agent.status === 'active') return true;
+      } catch (e) { /* skip invalid */ }
+    }
+  } catch (e) { /* ignore */ }
+  return false;
+}
+
 function isTeamSession(sessionId) {
   return existsSync(path.join(TEAMS_DIR, sessionId, 'config.json'));
 }
@@ -387,6 +400,7 @@ app.get('/api/sessions', async (req, res) => {
             isTeam,
             memberCount,
             hasActiveAgents: checkActiveAgents(entry.name),
+            hasRunningAgents: checkRunningAgents(resolvedAgentDir),
             hasWaitingForUser: !!checkWaitingForUser(resolvedAgentDir),
             ...planInfo
           });
@@ -419,6 +433,7 @@ app.get('/api/sessions', async (req, res) => {
           isTeam: false,
           memberCount: 0,
           hasActiveAgents: checkActiveAgents(sessionId),
+          hasRunningAgents: checkRunningAgents(metaAgentDir),
           hasWaitingForUser: !!checkWaitingForUser(metaAgentDir),
           ...planInfo
         });

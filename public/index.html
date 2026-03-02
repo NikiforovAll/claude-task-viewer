@@ -1455,12 +1455,9 @@
       max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
-    /* Active agents indicator */
-    .session-item.has-agents {
-      border-color: var(--success);
-      box-shadow: 0 0 0 1px var(--success-dim);
-    }
-    /* Permission pending (overrides has-agents) */
+    .agent-badge { font-size: 12px; cursor: default; }
+
+    /* Permission pending */
     .session-item.permission-pending {
       border-color: var(--warning);
       box-shadow: 0 0 0 1px var(--warning-dim);
@@ -2847,7 +2844,7 @@
         const memberCount = session.memberCount || 0;
 
         return `
-          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : session.hasActiveAgents ? 'has-agents' : ''}" title="${tooltip}">
+          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''}" title="${tooltip}">
             <div class="session-name">${escapeHtml(primaryName)}</div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
             ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
@@ -2857,6 +2854,7 @@
                 ${isTeam ? `<span class="team-badge" title="${memberCount} team members"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${memberCount}</span>` : ''}
                 ${(isTeam || session.project) ? `<span class="team-info-btn" onclick="event.stopPropagation(); showSessionInfoModal('${session.id}')" title="View session info">ℹ</span>` : ''}
                 ${session.hasPlan ? `<span class="plan-indicator" onclick="event.stopPropagation(); openPlanForSession('${session.id}')" title="View plan"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>` : ''}
+                ${session.hasRunningAgents ? '<span class="agent-badge" title="Active agents">🤖</span>' : ''}
                 ${hasInProgress ? '<span class="pulse"></span>' : ''}
               </span>
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
