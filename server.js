@@ -43,7 +43,7 @@ const TEAMS_DIR = path.join(CLAUDE_DIR, 'teams');
 const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
 const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
 
-const PERMISSION_TTL_MS = 120000;
+const PERMISSION_TTL_MS = 1800000;
 const AGENT_TTL_MS = 3600000;
 
 function checkWaitingForUser(agentDir) {
