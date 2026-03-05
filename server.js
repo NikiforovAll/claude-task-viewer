@@ -601,6 +601,25 @@ app.post('/api/sessions/:sessionId/plan/open', (req, res) => {
   }
 });
 
+// API: Open content in editor as temp file
+app.post('/api/open-in-editor', (req, res) => {
+  try {
+    const { content, title } = req.body;
+    if (!content) return res.status(400).json({ error: 'No content provided' });
+
+    const safeName = (title || 'message').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
+    const tmpFile = path.join(os.tmpdir(), `claude-kanban-${safeName}-${Date.now()}.md`);
+    require('fs').writeFileSync(tmpFile, content, 'utf8');
+
+    const editor = process.env.EDITOR || 'code';
+    require('child_process').spawn(editor, [tmpFile], { shell: true, stdio: 'ignore', detached: true }).unref();
+    res.json({ success: true, path: tmpFile });
+  } catch (error) {
+    console.error('Error opening in editor:', error);
+    res.status(500).json({ error: 'Failed to open in editor' });
+  }
+});
+
 // API: Get team config
 app.get('/api/teams/:name', (req, res) => {
   const config = loadTeamConfig(req.params.name);

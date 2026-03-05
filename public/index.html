@@ -2849,7 +2849,10 @@
       container.scrollTop = container.scrollHeight;
     }
 
+    let currentMsgDetailIdx = null;
+
     function showMsgDetail(idx) {
+      currentMsgDetailIdx = idx;
       const m = currentMessages[idx];
       if (!m) return;
       const body = document.getElementById('msg-detail-body');
@@ -2879,6 +2882,40 @@
 
     function closeMsgDetailModal() {
       document.getElementById('msg-detail-modal').classList.remove('visible');
+    }
+
+    async function copyMsgToClipboard(btn) {
+      const m = currentMessages[currentMsgDetailIdx];
+      if (!m) return;
+      const content = m.type === 'tool_use'
+        ? (m.fullDetail || m.detail || '')
+        : stripAnsi(m.fullText || m.text);
+      try {
+        await navigator.clipboard.writeText(content);
+        const svg = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>';
+        setTimeout(() => btn.innerHTML = svg, 1500);
+      } catch (e) {
+        console.error('Failed to copy:', e);
+      }
+    }
+
+    async function openMsgInEditor() {
+      const m = currentMessages[currentMsgDetailIdx];
+      if (!m) return;
+      const content = m.type === 'tool_use'
+        ? (m.fullDetail || m.detail || '')
+        : stripAnsi(m.fullText || m.text);
+      const title = m.type === 'tool_use' ? m.tool : m.type;
+      try {
+        await fetch('/api/open-in-editor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, title })
+        });
+      } catch (e) {
+        console.error('Failed to open in editor:', e);
+      }
     }
 
     function formatDuration(ms) {
@@ -4615,9 +4652,17 @@
     <div class="modal" onclick="event.stopPropagation()" style="max-width: 860px; width: 90vw; max-height: 90vh; display: flex; flex-direction: column;">
       <div class="modal-header">
         <h3 class="modal-title" id="msg-detail-title">Message</h3>
-        <button class="modal-close" aria-label="Close" onclick="closeMsgDetailModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button class="icon-btn" aria-label="Copy to clipboard" title="Copy to clipboard" onclick="copyMsgToClipboard(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="Open in editor" title="Open in editor" onclick="openMsgInEditor()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="modal-close" aria-label="Close" onclick="closeMsgDetailModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
       <div class="modal-body" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
         <div id="msg-detail-body" class="rendered-md" style="word-break: break-word; font-size: 13px; line-height: 1.6; overflow-y: auto; flex: 1; min-height: 0;"></div>
