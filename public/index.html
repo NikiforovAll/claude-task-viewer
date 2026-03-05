@@ -2696,6 +2696,7 @@
 
     const AGENT_COOLDOWN_MS = 3 * 60 * 1000;
     const AGENT_STALE_MS = 5 * 60 * 1000; // kept for reference; no longer used for force-stopping
+    const WAITING_TTL_MS = 5 * 60 * 1000;
     const AGENT_LOG_MAX = 8;
 
     async function fetchAgents(sessionId) {
@@ -2880,7 +2881,7 @@
         .slice(0, AGENT_LOG_MAX);
 
       const permFresh = currentWaiting && currentWaiting.timestamp &&
-        (now - new Date(currentWaiting.timestamp).getTime()) < 120000;
+        (now - new Date(currentWaiting.timestamp).getTime()) < WAITING_TTL_MS;
 
       if (visible.length === 0 && !permFresh) {
         footer.classList.remove('visible');
@@ -3045,7 +3046,7 @@
         const ACTIVE_PLAN_MS = 15 * 60 * 1000;
         const RECENTLY_MODIFIED_MS = 5 * 60 * 1000;
         const now = Date.now();
-        filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0 || s.hasActiveAgents || s.hasWaitingForUser ||
+        filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0 || s.hasActiveAgents || s.hasWaitingForUser || s.hasRecentLog ||
           (s.hasPlan && (now - new Date(s.modifiedAt).getTime()) <= ACTIVE_PLAN_MS) ||
           (now - new Date(s.modifiedAt).getTime()) <= RECENTLY_MODIFIED_MS);
       }

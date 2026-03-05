@@ -45,7 +45,7 @@ const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
 
 const PERMISSION_TTL_MS = 1800000;
 const AGENT_TTL_MS = 3600000;
-const AGENT_STALE_MS = 120000;
+const AGENT_STALE_MS = 300000;
 
 function checkWaitingForUser(agentDir) {
   try {
@@ -65,21 +65,21 @@ function isAgentFresh(agent) {
   return (Date.now() - new Date(agent.updatedAt).getTime()) < AGENT_TTL_MS;
 }
 
-function isSessionStale(meta) {
-  if (!meta.jsonlPath) return false;
+function getSessionLogAge(meta) {
+  if (!meta.jsonlPath) return Infinity;
   try {
     const mtime = statSync(meta.jsonlPath).mtime;
-    return (Date.now() - mtime.getTime()) > AGENT_STALE_MS;
-  } catch (e) { return false; }
+    return Date.now() - mtime.getTime();
+  } catch (e) { return Infinity; }
 }
 
-function checkActiveAgents(sessionId, meta) {
+function checkActiveAgents(sessionId, meta, stale) {
   const teamConfig = loadTeamConfig(sessionId);
   const resolvedId = (teamConfig && teamConfig.leadSessionId) ? teamConfig.leadSessionId : sessionId;
   const agentDir = path.join(AGENT_ACTIVITY_DIR, resolvedId);
   if (!existsSync(agentDir)) return false;
   try {
-    if (meta && isSessionStale(meta)) return false;
+    if (stale) return false;
     if (checkWaitingForUser(agentDir)) return true;
     for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
       try {
@@ -93,9 +93,9 @@ function checkActiveAgents(sessionId, meta) {
   return false;
 }
 
-function checkRunningAgents(agentDir, meta) {
+function checkRunningAgents(agentDir, meta, stale) {
   if (!existsSync(agentDir)) return false;
-  if (meta && isSessionStale(meta)) return false;
+  if (stale) return false;
   try {
     for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
       try {
@@ -447,8 +447,15 @@ app.get('/api/sessions', async (req, res) => {
           // Get metadata for this session
           const meta = metadata[entry.name] || {};
 
-          // Use newest task file mtime, or fall back to directory mtime if no tasks
-          const modifiedAt = newestTaskMtime ? newestTaskMtime.toISOString() : stat.mtime.toISOString();
+          const logAge = getSessionLogAge(meta);
+          const stale = logAge > AGENT_STALE_MS;
+
+          // Use newest of: task file mtime, JSONL mtime, directory mtime
+          let modifiedAt = newestTaskMtime ? newestTaskMtime.toISOString() : stat.mtime.toISOString();
+          if (meta.jsonlPath && logAge < Infinity) {
+            const jsonlMtime = new Date(Date.now() - logAge).toISOString();
+            if (jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
+          }
 
           const isTeam = isTeamSession(entry.name);
           const memberCount = isTeam ? (loadTeamConfig(entry.name)?.members?.length || 0) : 0;
@@ -475,9 +482,10 @@ app.get('/api/sessions', async (req, res) => {
             modifiedAt: modifiedAt,
             isTeam,
             memberCount,
-            hasActiveAgents: checkActiveAgents(entry.name, meta),
-            hasRunningAgents: checkRunningAgents(resolvedAgentDir, meta),
+            hasActiveAgents: checkActiveAgents(entry.name, meta, stale),
+            hasRunningAgents: checkRunningAgents(resolvedAgentDir, meta, stale),
             hasWaitingForUser: !!checkWaitingForUser(resolvedAgentDir),
+            hasRecentLog: logAge <= AGENT_STALE_MS,
             ...planInfo
           });
         }
@@ -487,9 +495,12 @@ app.get('/api/sessions', async (req, res) => {
     // Add sessions from metadata that don't have task directories
     for (const [sessionId, meta] of Object.entries(metadata)) {
       if (!sessionsMap.has(sessionId)) {
+        const logAge = getSessionLogAge(meta);
+        const stale = logAge > AGENT_STALE_MS;
         let modifiedAt = meta.created || null;
-        if (!modifiedAt && meta.jsonlPath) {
-          try { modifiedAt = statSync(meta.jsonlPath).mtime.toISOString(); } catch (e) {}
+        if (meta.jsonlPath && logAge < Infinity) {
+          const jsonlMtime = new Date(Date.now() - logAge).toISOString();
+          if (!modifiedAt || jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
         }
         const planInfo = getPlanInfo(meta.slug);
         const metaAgentDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
@@ -508,9 +519,10 @@ app.get('/api/sessions', async (req, res) => {
           modifiedAt: modifiedAt || new Date(0).toISOString(),
           isTeam: false,
           memberCount: 0,
-          hasActiveAgents: checkActiveAgents(sessionId, meta),
-          hasRunningAgents: checkRunningAgents(metaAgentDir, meta),
+          hasActiveAgents: checkActiveAgents(sessionId, meta, stale),
+          hasRunningAgents: checkRunningAgents(metaAgentDir, meta, stale),
           hasWaitingForUser: !!checkWaitingForUser(metaAgentDir),
+          hasRecentLog: logAge <= AGENT_STALE_MS,
           ...planInfo
         });
       }
@@ -686,7 +698,7 @@ app.get('/api/sessions/:sessionId/agents', (req, res) => {
   try {
     const metadata = loadSessionMetadata();
     const meta = metadata[sessionId] || {};
-    const sessionStale = isSessionStale(meta);
+    const sessionStale = getSessionLogAge(meta) > AGENT_STALE_MS;
 
     const files = readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'));
     const agents = [];
