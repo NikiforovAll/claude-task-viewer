@@ -52,16 +52,20 @@ const PERMISSION_TTL_MS = 1800000;
 const AGENT_TTL_MS = 3600000;
 const AGENT_STALE_MS = 300000;
 
-function checkWaitingForUser(agentDir) {
+const WAITING_RESOLVE_GRACE_MS = 5000;
+
+function checkWaitingForUser(agentDir, logMtime) {
   try {
-    const waitFile = path.join(agentDir, '_waiting.json');
-    if (!existsSync(waitFile)) return null;
-    const data = JSON.parse(readFileSync(waitFile, 'utf8'));
+    const data = JSON.parse(readFileSync(path.join(agentDir, '_waiting.json'), 'utf8'));
     if (data.status === 'waiting' && data.timestamp) {
-      const age = Date.now() - new Date(data.timestamp).getTime();
-      if (age < PERMISSION_TTL_MS) return data;
+      const waitTime = new Date(data.timestamp).getTime();
+      const age = Date.now() - waitTime;
+      if (age >= PERMISSION_TTL_MS) return null;
+      // After grace period, check if session resumed activity (user already responded)
+      if (logMtime && age >= WAITING_RESOLVE_GRACE_MS && logMtime > waitTime + WAITING_RESOLVE_GRACE_MS) return null;
+      return data;
     }
-  } catch (e) { /* skip invalid */ }
+  } catch (e) { /* skip — missing or invalid */ }
   return null;
 }
 
@@ -70,22 +74,20 @@ function isAgentFresh(agent) {
   return (Date.now() - new Date(agent.updatedAt).getTime()) < AGENT_TTL_MS;
 }
 
-function getSessionLogAge(meta) {
-  if (!meta.jsonlPath) return Infinity;
-  try {
-    const mtime = statSync(meta.jsonlPath).mtime;
-    return Date.now() - mtime.getTime();
-  } catch (e) { return Infinity; }
+function getSessionLogMtime(meta) {
+  if (!meta.jsonlPath) return null;
+  try { return statSync(meta.jsonlPath).mtime.getTime(); } catch (e) { return null; }
 }
 
-function checkActiveAgents(sessionId, meta, stale) {
+
+function checkActiveAgents(sessionId, meta, stale, logMtime) {
   const teamConfig = loadTeamConfig(sessionId);
   const resolvedId = (teamConfig && teamConfig.leadSessionId) ? teamConfig.leadSessionId : sessionId;
   const agentDir = path.join(AGENT_ACTIVITY_DIR, resolvedId);
   if (!existsSync(agentDir)) return false;
   try {
     if (stale) return false;
-    if (checkWaitingForUser(agentDir)) return true;
+    if (checkWaitingForUser(agentDir, logMtime)) return true;
     for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
       try {
         const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
@@ -366,13 +368,14 @@ app.get('/api/sessions', async (req, res) => {
           // Get metadata for this session
           const meta = metadata[entry.name] || {};
 
-          const logAge = getSessionLogAge(meta);
+          const logMtime = getSessionLogMtime(meta);
+          const logAge = logMtime ? Date.now() - logMtime : Infinity;
           const stale = logAge > AGENT_STALE_MS;
 
           // Use newest of: task file mtime, JSONL mtime, directory mtime
           let modifiedAt = newestTaskMtime ? newestTaskMtime.toISOString() : stat.mtime.toISOString();
-          if (meta.jsonlPath && logAge < Infinity) {
-            const jsonlMtime = new Date(Date.now() - logAge).toISOString();
+          if (logMtime) {
+            const jsonlMtime = new Date(logMtime).toISOString();
             if (jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
           }
 
@@ -401,9 +404,9 @@ app.get('/api/sessions', async (req, res) => {
             modifiedAt: modifiedAt,
             isTeam,
             memberCount,
-            hasActiveAgents: checkActiveAgents(entry.name, meta, stale),
+            hasActiveAgents: checkActiveAgents(entry.name, meta, stale, logMtime),
             hasRunningAgents: checkRunningAgents(resolvedAgentDir, meta, stale),
-            hasWaitingForUser: !!checkWaitingForUser(resolvedAgentDir),
+            hasWaitingForUser: !!checkWaitingForUser(resolvedAgentDir, logMtime),
             hasRecentLog: logAge <= AGENT_STALE_MS,
             ...planInfo
           });
@@ -414,11 +417,12 @@ app.get('/api/sessions', async (req, res) => {
     // Add sessions from metadata that don't have task directories
     for (const [sessionId, meta] of Object.entries(metadata)) {
       if (!sessionsMap.has(sessionId)) {
-        const logAge = getSessionLogAge(meta);
+        const logMtime = getSessionLogMtime(meta);
+        const logAge = logMtime ? Date.now() - logMtime : Infinity;
         const stale = logAge > AGENT_STALE_MS;
         let modifiedAt = meta.created || null;
-        if (meta.jsonlPath && logAge < Infinity) {
-          const jsonlMtime = new Date(Date.now() - logAge).toISOString();
+        if (logMtime) {
+          const jsonlMtime = new Date(logMtime).toISOString();
           if (!modifiedAt || jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
         }
         const planInfo = getPlanInfo(meta.slug);
@@ -438,9 +442,9 @@ app.get('/api/sessions', async (req, res) => {
           modifiedAt: modifiedAt || new Date(0).toISOString(),
           isTeam: false,
           memberCount: 0,
-          hasActiveAgents: checkActiveAgents(sessionId, meta, stale),
+          hasActiveAgents: checkActiveAgents(sessionId, meta, stale, logMtime),
           hasRunningAgents: checkRunningAgents(metaAgentDir, meta, stale),
-          hasWaitingForUser: !!checkWaitingForUser(metaAgentDir),
+          hasWaitingForUser: !!checkWaitingForUser(metaAgentDir, logMtime),
           hasRecentLog: logAge <= AGENT_STALE_MS,
           ...planInfo
         });
@@ -453,9 +457,9 @@ app.get('/api/sessions', async (req, res) => {
         for (const dir of readdirSync(AGENT_ACTIVITY_DIR, { withFileTypes: true })) {
           if (!dir.isDirectory() || sessionsMap.has(dir.name)) continue;
           const agentDir = path.join(AGENT_ACTIVITY_DIR, dir.name);
-          const waiting = checkWaitingForUser(agentDir);
-          if (!waiting) continue;
           const meta = metadata[dir.name] || {};
+          const waiting = checkWaitingForUser(agentDir, getSessionLogMtime(meta));
+          if (!waiting) continue;
           sessionsMap.set(dir.name, {
             id: dir.name,
             name: getSessionDisplayName(dir.name, meta),
@@ -589,7 +593,7 @@ app.post('/api/sessions/:sessionId/plan/open', (req, res) => {
     if (!existsSync(planPath)) return res.status(404).json({ error: 'No plan found' });
 
     const editor = process.env.EDITOR || 'code';
-    require('child_process').execFile(editor, [planPath]);
+    require('child_process').spawn(editor, [planPath], { shell: true, stdio: 'ignore', detached: true }).unref();
     res.json({ success: true });
   } catch (error) {
     console.error('Error opening plan in VS Code:', error);
@@ -617,7 +621,8 @@ app.get('/api/sessions/:sessionId/agents', (req, res) => {
   try {
     const metadata = loadSessionMetadata();
     const meta = metadata[sessionId] || {};
-    const sessionStale = getSessionLogAge(meta) > AGENT_STALE_MS;
+    const logMtime = getSessionLogMtime(meta);
+    const sessionStale = logMtime ? (Date.now() - logMtime) > AGENT_STALE_MS : true;
 
     const files = readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'));
     const agents = [];
@@ -632,7 +637,7 @@ app.get('/api/sessions/:sessionId/agents', (req, res) => {
         agents.push(agent);
       } catch (e) { /* skip invalid */ }
     }
-    const waitingForUser = checkWaitingForUser(agentDir);
+    const waitingForUser = checkWaitingForUser(agentDir, logMtime);
     res.json({ agents, waitingForUser });
   } catch (e) {
     res.json({ agents: [], waitingForUser: null });

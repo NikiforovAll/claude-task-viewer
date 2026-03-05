@@ -28,6 +28,7 @@
       --text-tertiary: #9a9da5;
       --text-muted: #7d808a;
       --accent: #E86F33;
+      --accent-text: #f0a070;
       --accent-dim: rgba(232, 111, 51, 0.22);
       --accent-glow: rgba(232, 111, 51, 0.55);
       --success: #3ecf8e;
@@ -474,7 +475,7 @@
 
     .session-latest-msg {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       margin-top: 2px;
       white-space: nowrap;
       overflow: hidden;
@@ -484,6 +485,9 @@
       color: var(--text-tertiary);
       font-weight: 500;
       font-size: 10px;
+    }
+    .session-latest-msg .lm-label-assistant {
+      color: var(--accent-text);
     }
 
     /* Footer */
@@ -1476,6 +1480,7 @@
     .msg-item.msg-assistant {
       border-left: 3px solid var(--accent);
     }
+    .msg-assistant .msg-text { color: var(--accent-text); }
     .msg-item.msg-tool {
       border-left: 3px solid var(--team);
       font-size: 11px;
@@ -1644,6 +1649,7 @@
       --text-secondary: #444444;
       --text-tertiary: #666666;
       --text-muted: #888888;
+      --accent-text: #b85a20;
       --accent-dim: rgba(232, 111, 51, 0.18);
       --accent-glow: rgba(232, 111, 51, 0.5);
       --success: #1a8a5a;
@@ -1656,6 +1662,12 @@
 
     body.light::before {
       display: none;
+    }
+    body.light .session-latest-msg .lm-label-assistant {
+      color: var(--text-primary);
+    }
+    body.light .msg-assistant .msg-text {
+      color: var(--text-secondary);
     }
 
     /* Interactive elements */
@@ -2794,7 +2806,8 @@
       const label = last.type === 'assistant' ? 'Claude' : 'User';
       const cleaned = cleanMessageText(last.text);
       const text = cleaned.length > 120 ? cleaned.slice(0, 120) + '...' : cleaned;
-      const html = `<span class="lm-label">${escapeHtml(label)}:</span> ${escapeHtml(text)}`;
+      const labelCls = last.type === 'assistant' ? 'lm-label lm-label-assistant' : 'lm-label';
+      const html = `<span class="${labelCls}">${escapeHtml(label)}:</span> ${escapeHtml(text)}`;
       el.innerHTML = html;
       el.classList.add('visible');
       if (lastInlineMessage !== html) {
