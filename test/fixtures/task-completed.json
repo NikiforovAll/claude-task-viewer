@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "Implement feature X",
+  "description": "Add the new feature as described in the spec",
+  "activeForm": "Working on implementation",
+  "status": "completed",
+  "blocks": [],
+  "blockedBy": []
+}

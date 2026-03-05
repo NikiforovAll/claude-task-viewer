@@ -1,0 +1,8 @@
+{
+  "agentId": "abc123def456",
+  "type": "general-purpose",
+  "status": "active",
+  "startedAt": "2026-03-05T10:00:00Z",
+  "lastMessage": "Working on the implementation...",
+  "updatedAt": "2026-03-05T10:05:00Z"
+}

@@ -1,0 +1,33 @@
+{
+  "$id": "team-config.schema.json",
+  "title": "Claude Code Team Config",
+  "type": "object",
+  "required": ["name", "leadAgentId", "members"],
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": ["string", "null"] },
+    "createdAt": { "type": "number" },
+    "leadAgentId": { "type": "string" },
+    "leadSessionId": { "type": ["string", "null"] },
+    "working_dir": { "type": ["string", "null"] },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["agentId", "name"],
+        "properties": {
+          "agentId": { "type": "string" },
+          "name": { "type": "string" },
+          "agentType": { "type": "string" },
+          "model": { "type": ["string", "null"] },
+          "joinedAt": { "type": "number" },
+          "tmuxPaneId": { "type": "string" },
+          "cwd": { "type": ["string", "null"] },
+          "subscriptions": { "type": "array" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

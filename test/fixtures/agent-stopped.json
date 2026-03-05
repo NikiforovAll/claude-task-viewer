@@ -1,0 +1,9 @@
+{
+  "agentId": "def789ghi012",
+  "type": "Explore",
+  "status": "stopped",
+  "startedAt": "2026-03-05T08:00:00Z",
+  "stoppedAt": "2026-03-05T08:15:00Z",
+  "updatedAt": "2026-03-05T08:15:00Z",
+  "lastMessage": "Completed the exploration task."
+}

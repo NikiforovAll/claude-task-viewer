@@ -1,0 +1,31 @@
+{
+  "$id": "sessions-index.schema.json",
+  "title": "Claude Code Sessions Index",
+  "type": "object",
+  "required": ["entries"],
+  "properties": {
+    "version": { "type": "number" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sessionId"],
+        "properties": {
+          "sessionId": { "type": "string" },
+          "fullPath": { "type": ["string", "null"] },
+          "fileMtime": { "type": "number" },
+          "firstPrompt": { "type": ["string", "null"] },
+          "messageCount": { "type": "number" },
+          "created": { "type": ["string", "null"] },
+          "modified": { "type": ["string", "null"] },
+          "gitBranch": { "type": ["string", "null"] },
+          "projectPath": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "isSidechain": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
