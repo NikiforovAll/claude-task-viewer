@@ -2753,7 +2753,7 @@
     function cleanMessageText(text) {
       const cmd = parseCommandMessage(text);
       if (cmd) return cmd;
-      return text
+      return stripAnsi(text)
         .replace(/<[^>]+>/g, '')
         .replace(/\*\*/g, '')
         .replace(/^#+\s*/gm, '')
@@ -2824,7 +2824,7 @@
         const descHtml = m.description && m.description !== fullText ? `<div style="margin-bottom:8px;color:var(--text-secondary);font-size:0.85rem">${escapeHtml(m.description)}</div>` : '';
         body.innerHTML = fullText ? descHtml + `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>';
       } else {
-        const text = m.fullText || m.text;
+        const text = stripAnsi(m.fullText || m.text);
         document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : 'User';
         if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
           body.innerHTML = DOMPurify.sanitize(marked.parse(text));
@@ -2909,7 +2909,7 @@
           : a.status === 'idle'
           ? `idle · ${formatDuration(elapsed)}`
           : `active · ${formatDuration(elapsed)}`;
-        const msgTrimmed = a.lastMessage?.trim() || '';
+        const msgTrimmed = stripAnsi(a.lastMessage?.trim() || '');
         const msgTrunc = msgTrimmed.length > 60 ? msgTrimmed.substring(0, 60) + '…' : msgTrimmed;
         const msgHtml = msgTrunc
           ? `<div class="agent-message" title="${escapeHtml(msgTrimmed)}">${escapeHtml(msgTrunc)}</div>` : '';
@@ -2970,8 +2970,8 @@
 
       if (agent.lastMessage) {
         const sanitized = typeof DOMPurify !== 'undefined' && typeof marked !== 'undefined'
-          ? DOMPurify.sanitize(marked.parse(agent.lastMessage.trim()))
-          : `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(agent.lastMessage.trim())}</pre>`;
+          ? DOMPurify.sanitize(marked.parse(stripAnsi(agent.lastMessage.trim())))
+          : `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(stripAnsi(agent.lastMessage.trim()))}</pre>`;
         html += `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
           <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Last Message</div>
           <div class="detail-desc" style="font-size:13px;">${sanitized}</div>
@@ -4066,6 +4066,10 @@
       if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
       if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
       return date.toLocaleDateString();
+    }
+
+    function stripAnsi(text) {
+      return typeof text === 'string' ? text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') : text;
     }
 
     function escapeHtml(text) {
