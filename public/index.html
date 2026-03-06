@@ -1805,6 +1805,18 @@
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
 
+    @keyframes live-border-pulse {
+      0%, 100% { border-color: var(--accent); box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 20px var(--accent-dim), 0 0 4px var(--accent); }
+      50% { border-color: var(--accent-dim); box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 6px var(--accent-dim); }
+    }
+    .modal-overlay.live-overlay {
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .modal.live {
+      border-width: 2px;
+      animation: live-border-pulse 2s ease-in-out infinite;
+    }
+
     .modal-header {
       display: flex;
       align-items: center;
@@ -2318,11 +2330,16 @@
       <div class="panel-resize-handle" id="message-panel-resize"></div>
       <header class="message-panel-header">
         <h3>Session Log</h3>
+        <div style="display:flex;gap:4px;align-items:center;">
+        <button class="icon-btn" onclick="openLiveLatestMessage()" title="Follow latest message (Shift+M)" aria-label="Follow latest message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
         <button class="detail-close" onclick="toggleMessagePanel()" aria-label="Close message panel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
+        </div>
       </header>
       <div id="message-panel-content" class="message-panel-content"></div>
     </aside>
@@ -2779,6 +2796,13 @@
       }
     }
 
+    function openLiveLatestMessage() {
+      if (currentMessages.length) {
+        msgDetailFollowLatest = true;
+        showMsgDetail(currentMessages.length - 1);
+      }
+    }
+
     async function fetchMessages(sessionId) {
       try {
         const res = await fetch(`/api/sessions/${sessionId}/messages?limit=15`);
@@ -2790,6 +2814,9 @@
         currentMessages = data.messages;
         updateLatestMessage(data.messages);
         if (messagePanelOpen) renderMessages(data.messages);
+        if (msgDetailFollowLatest && data.messages.length) {
+          showMsgDetail(data.messages.length - 1);
+        }
       } catch (e) {
         console.error('[fetchMessages]', e);
       }
@@ -2842,7 +2869,7 @@
         return;
       }
       container.innerHTML = messages.map((m, i) => {
-        const clickable = `onclick="showMsgDetail(${i})" style="cursor:pointer"`;
+        const clickable = `onclick="msgDetailFollowLatest=false;showMsgDetail(${i})" style="cursor:pointer"`;
         if (m.type === 'user') {
           const cmd = parseCommandMessage(m.text);
           const displayText = cmd ? cmd : escapeHtml(cleanMessageText(m.text));
@@ -2869,6 +2896,7 @@
     }
 
     let currentMsgDetailIdx = null;
+    let msgDetailFollowLatest = false;
 
     function showMsgDetail(idx) {
       currentMsgDetailIdx = idx;
@@ -2892,15 +2920,19 @@
       const modal = document.getElementById('msg-detail-modal').querySelector('.modal');
       const hasTable = body.querySelector('table') !== null;
       modal.style.maxWidth = hasTable ? '1100px' : '860px';
+      modal.classList.toggle('live', msgDetailFollowLatest);
+      const overlay = document.getElementById('msg-detail-modal');
+      overlay.classList.toggle('live-overlay', msgDetailFollowLatest);
 
       const meta = [formatDate(m.timestamp)];
       if (m.model) meta.unshift(m.model);
       document.getElementById('msg-detail-meta').textContent = meta.join(' · ');
-      document.getElementById('msg-detail-modal').classList.add('visible');
+      overlay.classList.add('visible');
     }
 
     function closeMsgDetailModal() {
       document.getElementById('msg-detail-modal').classList.remove('visible');
+      msgDetailFollowLatest = false;
     }
 
     async function copyMsgToClipboard(btn) {
@@ -3936,6 +3968,10 @@
       if (document.querySelector('.modal-overlay.visible')) {
         if (e.key === 'Escape') {
           document.querySelectorAll('.modal-overlay.visible').forEach(m => m.classList.remove('visible'));
+          msgDetailFollowLatest = false;
+        } else if ((e.key === 'M' || e.key === 'm') && e.shiftKey && document.getElementById('msg-detail-modal').classList.contains('visible')) {
+          e.preventDefault();
+          closeMsgDetailModal();
         }
         return;
       }
@@ -3949,6 +3985,18 @@
       if ((e.key === 'L' || e.key === 'l') && e.shiftKey) {
         e.preventDefault();
         toggleMessagePanel();
+        return;
+      }
+
+      if ((e.key === 'M' || e.key === 'm') && e.shiftKey) {
+        e.preventDefault();
+        const msgDetailModal = document.getElementById('msg-detail-modal');
+        if (msgDetailModal.classList.contains('visible')) {
+          closeMsgDetailModal();
+        } else if (currentMessages.length) {
+          msgDetailFollowLatest = true;
+          showMsgDetail(currentMessages.length - 1);
+        }
         return;
       }
 
@@ -4808,6 +4856,10 @@
               <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Shift+L</kbd></td>
                 <td style="padding: 4px 0; color: var(--text-primary);">Toggle session log</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Shift+M</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Open last message detail</td>
               </tr>
             </table>
           </div>
