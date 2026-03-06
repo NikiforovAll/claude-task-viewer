@@ -162,6 +162,21 @@
 
     .sidebar.collapsed .sidebar-resize-handle { display: none; }
 
+    .panel-resize-handle {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+      transition: background 0.15s;
+    }
+    .panel-resize-handle:hover,
+    .panel-resize-handle.dragging {
+      background: var(--accent-dim);
+    }
+
     .logo {
       display: flex;
       align-items: center;
@@ -892,7 +907,7 @@
       position: fixed;
       top: 0;
       right: 0;
-      width: 540px;
+      width: var(--detail-panel-width, 540px);
       height: 100vh;
       background: var(--bg-surface);
       border-left: 1px solid var(--border);
@@ -907,6 +922,8 @@
     .detail-panel.visible {
       display: flex;
     }
+    .detail-panel.resizing,
+    .message-panel.resizing { transition: none; }
 
     .detail-header {
       padding: 16px 20px;
@@ -1430,7 +1447,7 @@
       position: fixed;
       top: 0;
       right: 0;
-      width: 540px;
+      width: var(--message-panel-width, 540px);
       height: 100vh;
       background: var(--bg-surface);
       border-left: 1px solid var(--border);
@@ -2278,6 +2295,7 @@
 
     <!-- Detail panel -->
     <aside id="detail-panel" class="detail-panel">
+      <div class="panel-resize-handle" id="detail-panel-resize"></div>
       <header class="detail-header">
         <h3>Task Details</h3>
         <div style="display: flex; gap: 8px; align-items: center;">
@@ -2297,6 +2315,7 @@
     </aside>
 
     <aside id="message-panel" class="message-panel">
+      <div class="panel-resize-handle" id="message-panel-resize"></div>
       <header class="message-panel-header">
         <h3>Session Log</h3>
         <button class="detail-close" onclick="toggleMessagePanel()" aria-label="Close message panel">
@@ -4335,6 +4354,44 @@
       }
     }
 
+    function initPanelResize(panelId, handleId, cssVar, storageKey) {
+      const panel = document.getElementById(panelId);
+      const handle = document.getElementById(handleId);
+      let startX, startWidth;
+
+      handle.addEventListener('mousedown', (e) => {
+        startX = e.clientX;
+        startWidth = panel.offsetWidth;
+        panel.classList.add('resizing');
+        handle.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      });
+
+      function onMove(e) {
+        const w = Math.min(900, Math.max(320, startWidth - (e.clientX - startX)));
+        panel.style.setProperty(cssVar, w + 'px');
+      }
+
+      function onUp() {
+        panel.classList.remove('resizing');
+        handle.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        localStorage.setItem(storageKey, panel.style.getPropertyValue(cssVar));
+      }
+    }
+
+    function loadPanelWidths() {
+      [['detail-panel', '--detail-panel-width'], ['message-panel', '--message-panel-width']].forEach(([id, cssVar]) => {
+        const w = localStorage.getItem(id + '-width');
+        if (w) document.getElementById(id).style.setProperty(cssVar, w);
+      });
+    }
+
     function loadPreferences() {
       document.getElementById('session-filter').value = sessionFilter;
       document.getElementById('session-limit').value = sessionLimit;
@@ -4607,6 +4664,9 @@
 
     loadSidebarState();
     initSidebarResize();
+    loadPanelWidths();
+    initPanelResize('detail-panel', 'detail-panel-resize', '--detail-panel-width', 'detail-panel-width');
+    initPanelResize('message-panel', 'message-panel-resize', '--message-panel-width', 'message-panel-width');
     fetch('/api/version').then(r => r.json()).then(d => {
       document.getElementById('sidebar-footer').textContent = 'v' + d.version;
     }).catch(() => {});
