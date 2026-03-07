@@ -3758,11 +3758,16 @@
         }
         sidebar.classList.add('sidebar-focused');
         const items = getSessionItems();
-        if (selectedSessionIdx < 0 && items.length > 0) {
+        if (items.length > 0) {
           const activeIdx = items.findIndex(el => el.classList.contains('active'));
-          selectSessionByIndex(activeIdx >= 0 ? activeIdx : 0);
-        } else if (items.length > 0) {
-          selectSessionByIndex(selectedSessionIdx);
+          if (activeIdx >= 0) {
+            selectSessionByIndex(activeIdx);
+          } else if (selectedSessionKbId) {
+            const restoredIdx = items.findIndex(el => el.dataset.sessionId === selectedSessionKbId);
+            selectSessionByIndex(restoredIdx >= 0 ? restoredIdx : 0);
+          } else {
+            selectSessionByIndex(0);
+          }
         }
       } else {
         // Session changed while in sidebar — reset stale selection
