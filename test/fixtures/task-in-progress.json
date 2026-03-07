@@ -1,0 +1,9 @@
+{
+  "id": "2",
+  "subject": "Fix bug in parser",
+  "description": null,
+  "activeForm": null,
+  "status": "in_progress",
+  "blocks": ["3"],
+  "blockedBy": ["1"]
+}

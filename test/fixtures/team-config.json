@@ -1,0 +1,29 @@
+{
+  "name": "test-team-alpha",
+  "description": "Testing team for contract validation",
+  "createdAt": 1772064976231,
+  "leadAgentId": "team-lead@test-team-alpha",
+  "leadSessionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "members": [
+    {
+      "agentId": "team-lead@test-team-alpha",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-opus-4-6",
+      "joinedAt": 1772064976231,
+      "tmuxPaneId": "",
+      "cwd": "/home/user/project",
+      "subscriptions": []
+    },
+    {
+      "agentId": "worker-1@test-team-alpha",
+      "name": "worker-1",
+      "agentType": "general-purpose",
+      "model": "claude-sonnet-4-6",
+      "joinedAt": 1772064980000,
+      "tmuxPaneId": "%1",
+      "cwd": "/home/user/project",
+      "subscriptions": []
+    }
+  ]
+}

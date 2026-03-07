@@ -1,6 +1,6 @@
 {
   "name": "claude-code-kanban",
-  "version": "1.18.0",
+  "version": "1.19.0-rc.10",
   "description": "A web-based Kanban board for viewing Claude Code tasks with agent teams support",
   "main": "server.js",
   "bin": {
@@ -8,7 +8,10 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js --open"
+    "dev": "node server.js --open",
+    "test": "node --test test/contracts.test.js",
+    "test:hooks": "bash tests/test-agent-spy.sh",
+    "validate:schemas": "node test/validate-live-schemas.js"
   },
   "repository": {
     "type": "git",
@@ -42,6 +45,11 @@
     "server.js",
     "install.js",
     "hooks/agent-spy.sh",
+    "lib/**/*",
     "public/**/*"
-  ]
+  ],
+  "devDependencies": {
+    "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1"
+  }
 }

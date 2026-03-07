@@ -1,0 +1,118 @@
+{
+  "$id": "session-jsonl-line.schema.json",
+  "title": "Claude Code Session JSONL Line",
+  "description": "A single line from a session JSONL file. Uses oneOf for different line types.",
+  "type": "object",
+  "required": ["type"],
+  "oneOf": [
+    {
+      "title": "Assistant message",
+      "properties": {
+        "type": { "const": "assistant" },
+        "timestamp": { "type": "string" },
+        "message": {
+          "type": "object",
+          "required": ["role", "content"],
+          "properties": {
+            "role": { "const": "assistant" },
+            "model": { "type": ["string", "null"] },
+            "content": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["type"],
+                "oneOf": [
+                  {
+                    "properties": {
+                      "type": { "const": "text" },
+                      "text": { "type": "string" }
+                    },
+                    "required": ["type", "text"]
+                  },
+                  {
+                    "properties": {
+                      "type": { "const": "tool_use" },
+                      "name": { "type": "string" },
+                      "input": {}
+                    },
+                    "required": ["type", "name"]
+                  },
+                  {
+                    "properties": {
+                      "type": { "const": "thinking" },
+                      "thinking": { "type": "string" }
+                    },
+                    "required": ["type"]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "required": ["type", "message"]
+    },
+    {
+      "title": "User message",
+      "properties": {
+        "type": { "const": "user" },
+        "timestamp": { "type": "string" },
+        "isMeta": { "type": "boolean" },
+        "message": {
+          "type": "object",
+          "required": ["role"],
+          "properties": {
+            "role": { "const": "user" },
+            "content": { "type": ["string", "array"] }
+          }
+        }
+      },
+      "required": ["type", "message"]
+    },
+    {
+      "title": "Progress/meta line",
+      "properties": {
+        "type": { "const": "progress" },
+        "sessionId": { "type": "string" },
+        "version": { "type": "string" },
+        "cwd": { "type": "string" }
+      },
+      "not": { "required": ["data"] },
+      "required": ["type"]
+    },
+    {
+      "title": "File history snapshot",
+      "properties": {
+        "type": { "const": "file-history-snapshot" }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Agent progress",
+      "properties": {
+        "type": { "const": "progress" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "type": { "const": "agent_progress" },
+            "agentId": { "type": "string" }
+          },
+          "required": ["type", "agentId"]
+        },
+        "parentToolUseID": { "type": "string" }
+      },
+      "required": ["type", "data", "parentToolUseID"]
+    }
+  ],
+  "properties": {
+    "type": { "type": "string" },
+    "uuid": { "type": "string" },
+    "parentUuid": { "type": ["string", "null"] },
+    "sessionId": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "slug": { "type": "string" },
+    "cwd": { "type": "string" },
+    "version": { "type": "string" }
+  },
+  "additionalProperties": true
+}

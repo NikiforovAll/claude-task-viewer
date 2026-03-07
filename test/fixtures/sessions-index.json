@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "sessionId": "11111111-2222-3333-4444-555555555555",
+      "fullPath": "/home/user/.claude/projects/test/11111111-2222-3333-4444-555555555555.jsonl",
+      "fileMtime": 1772064976231,
+      "firstPrompt": "Add logging to services",
+      "messageCount": 42,
+      "created": "2026-03-01T10:00:00Z",
+      "modified": "2026-03-01T12:00:00Z",
+      "gitBranch": "feat/logging",
+      "projectPath": "/home/user/project",
+      "isSidechain": false
+    },
+    {
+      "sessionId": "66666666-7777-8888-9999-aaaaaaaaaaaa",
+      "fullPath": null,
+      "fileMtime": 1772064980000,
+      "firstPrompt": null,
+      "messageCount": 5,
+      "created": "2026-03-02T09:00:00Z",
+      "modified": "2026-03-02T09:30:00Z",
+      "gitBranch": "main",
+      "projectPath": "/home/user/project",
+      "description": "Quick fix session",
+      "isSidechain": false
+    }
+  ]
+}

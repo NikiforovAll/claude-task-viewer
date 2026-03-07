@@ -28,6 +28,7 @@
       --text-tertiary: #9a9da5;
       --text-muted: #7d808a;
       --accent: #E86F33;
+      --accent-text: #f0a070;
       --accent-dim: rgba(232, 111, 51, 0.22);
       --accent-glow: rgba(232, 111, 51, 0.55);
       --success: #3ecf8e;
@@ -160,6 +161,21 @@
     }
 
     .sidebar.collapsed .sidebar-resize-handle { display: none; }
+
+    .panel-resize-handle {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+      transition: background 0.15s;
+    }
+    .panel-resize-handle:hover,
+    .panel-resize-handle.dragging {
+      background: var(--accent-dim);
+    }
 
     .logo {
       display: flex;
@@ -382,7 +398,7 @@
 
     .session-item.active {
       background: var(--bg-elevated);
-      border-color: var(--border);
+      border-color: var(--accent);
     }
 
     .session-name {
@@ -470,6 +486,23 @@
       font-weight: 450;
       color: var(--text-tertiary);
       margin-top: 6px;
+    }
+
+    .session-latest-msg {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .session-latest-msg .lm-label {
+      color: var(--text-tertiary);
+      font-weight: 500;
+      font-size: 10px;
+    }
+    .session-latest-msg .lm-label-assistant {
+      color: var(--accent-text);
     }
 
     /* Footer */
@@ -561,6 +594,24 @@
       font-size: 12px;
       color: var(--text-tertiary);
       margin-top: 4px;
+    }
+
+    .latest-message {
+      flex: 1;
+      font-size: 11px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: right;
+      padding: 0 16px;
+      min-width: 0;
+      display: none;
+    }
+    .latest-message.visible { display: block; }
+    .latest-message .lm-label {
+      color: var(--accent);
+      font-weight: 500;
     }
 
     .view-actions {
@@ -856,7 +907,7 @@
       position: fixed;
       top: 0;
       right: 0;
-      width: 440px;
+      width: var(--detail-panel-width, 540px);
       height: 100vh;
       background: var(--bg-surface);
       border-left: 1px solid var(--border);
@@ -871,6 +922,8 @@
     .detail-panel.visible {
       display: flex;
     }
+    .detail-panel.resizing,
+    .message-panel.resizing { transition: none; }
 
     .detail-header {
       padding: 16px 20px;
@@ -1389,6 +1442,140 @@
       padding: 6px 10px;
     }
 
+    /* Message log panel */
+    .message-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: var(--message-panel-width, 540px);
+      height: 100vh;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border);
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
+      display: none;
+      flex-direction: column;
+      z-index: 99;
+      overflow: hidden;
+    }
+    .message-panel.visible { display: flex; }
+    .message-panel-header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-image: linear-gradient(to right, transparent, var(--border), transparent);
+      background-size: 100% 1px;
+      background-repeat: no-repeat;
+      background-position: bottom;
+    }
+    .message-panel-header h3 {
+      font-family: var(--serif);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .message-panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .msg-item {
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+    .msg-item.msg-user {
+      border-left: 3px solid var(--text-muted);
+    }
+    .msg-item.msg-assistant {
+      border-left: 3px solid var(--accent);
+    }
+    .msg-assistant .msg-text { color: var(--accent-text); }
+    .msg-item.msg-tool {
+      border-left: 3px solid var(--team);
+      font-size: 11px;
+      padding: 5px 10px;
+      color: var(--text-secondary);
+    }
+    .msg-icon {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      opacity: 0.6;
+    }
+    .msg-body { flex: 1; min-width: 0; }
+    .msg-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-primary);
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .msg-tool .msg-text { color: var(--text-secondary); }
+    .msg-agent-link { color: var(--accent); font-size: 0.85rem; margin-left: 4px; opacity: 0.7; }
+    .msg-agent-link:hover { opacity: 1; }
+    .agent-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-top: 16px; }
+    .agent-tab { padding: 8px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; user-select: none; }
+    .agent-tab:hover { color: var(--text-secondary); border-bottom-color: var(--text-muted); }
+    .agent-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .agent-tab-panel { display: none; padding-top: 12px; overflow: hidden; }
+    .agent-tab-panel.active { display: block; }
+    .rendered-md h1, .rendered-md h2, .rendered-md h3,
+    .rendered-md h4, .rendered-md h5, .rendered-md h6 {
+      margin-top: 1em;
+      margin-bottom: 0.4em;
+    }
+    .rendered-md h1:first-child, .rendered-md h2:first-child,
+    .rendered-md h3:first-child { margin-top: 0; }
+    .rendered-md p { margin: 0.5em 0; }
+    .rendered-md ul, .rendered-md ol { margin: 0.4em 0; padding-left: 2em; }
+    .rendered-md li { margin: 0.2em 0; }
+    .rendered-md pre { margin: 0.6em 0; }
+    .rendered-md blockquote { margin: 0.6em 0; }
+    .rendered-md table { margin: 0.6em 0; border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
+    .rendered-md th, .rendered-md td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .rendered-md th { background: var(--bg-hover); font-weight: 600; }
+    .rendered-md tr:hover td { background: var(--bg-hover); }
+    .rendered-md hr { margin: 0.8em 0; border-color: var(--border); }
+    .msg-detail-pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+    .msg-cmd .msg-text code {
+      background: var(--bg-hover);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .msg-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .msg-empty {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 40px 20px;
+      font-size: 12px;
+    }
+
     /* Agent footer panel */
     .agent-footer {
       display: none;
@@ -1455,6 +1642,27 @@
       max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
+    .agent-badge { font-size: 12px; cursor: default; }
+
+    /* Permission pending — indicated by ❓ badge only */
+    .permission-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--warning-dim);
+      border: 1px solid var(--warning);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--warning);
+      white-space: nowrap;
+      animation: permission-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes permission-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
     /* Light mode */
     body.light {
       --bg-deep: #e8e6e3;
@@ -1466,6 +1674,7 @@
       --text-secondary: #444444;
       --text-tertiary: #666666;
       --text-muted: #888888;
+      --accent-text: #b85a20;
       --accent-dim: rgba(232, 111, 51, 0.18);
       --accent-glow: rgba(232, 111, 51, 0.5);
       --success: #1a8a5a;
@@ -1478,6 +1687,12 @@
 
     body.light::before {
       display: none;
+    }
+    body.light .session-latest-msg .lm-label-assistant {
+      color: var(--text-primary);
+    }
+    body.light .msg-assistant .msg-text {
+      color: var(--text-secondary);
     }
 
     /* Interactive elements */
@@ -1598,6 +1813,18 @@
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
 
+    @keyframes live-border-pulse {
+      0%, 100% { border-color: var(--accent); box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 20px var(--accent-dim), 0 0 4px var(--accent); }
+      50% { border-color: var(--accent-dim); box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 6px var(--accent-dim); }
+    }
+    .modal-overlay.live-overlay {
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .modal.live {
+      border-width: 2px;
+      animation: live-border-pulse 2s ease-in-out infinite;
+    }
+
     .modal-header {
       display: flex;
       align-items: center;
@@ -1631,7 +1858,7 @@
     }
 
     .modal-body {
-      margin-bottom: 24px;
+      margin-bottom: 0;
     }
 
     .form-group {
@@ -1720,6 +1947,8 @@
       display: flex;
       gap: 12px;
       justify-content: flex-end;
+      padding-top: 16px;
+      flex-shrink: 0;
     }
 
     .btn {
@@ -1862,6 +2091,103 @@
       animation: shimmer 2s linear infinite;
     }
 
+    /* Project group headers in session list */
+    .project-group-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px 4px;
+      margin-top: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .project-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .project-group-header:hover {
+      color: var(--text-primary);
+    }
+
+    .project-group-header .group-chevron {
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .project-group-header.collapsed .group-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .project-group-header .group-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-group-header .group-count {
+      font-weight: 400;
+      color: var(--text-muted);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .project-group-header .group-path-toggle {
+      color: var(--text-muted);
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+
+    .project-group-header .group-path-toggle:hover {
+      color: var(--accent);
+    }
+
+    .project-group-breadcrumb {
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 0 10px 0 28px;
+      font-family: 'IBM Plex Mono', monospace;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease;
+      cursor: pointer;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .project-group-breadcrumb.expanded {
+      max-height: 24px;
+      opacity: 1;
+      padding: 2px 10px 4px 28px;
+    }
+
+    .project-group-breadcrumb:hover {
+      color: var(--accent);
+    }
+
+    .project-group-breadcrumb .sep {
+      opacity: 0.4;
+    }
+
+    .project-group-sessions {
+      display: block;
+    }
+
+    .project-group-sessions.collapsed {
+      display: none;
+    }
+
     /* Session list hover accent bar */
     .session-item {
       position: relative;
@@ -1886,7 +2212,7 @@
 
     .sidebar-focused .session-item.active {
       background: transparent;
-      border-color: transparent;
+      border-color: var(--accent);
     }
 
     .sidebar-focused .session-item.active::before {
@@ -1903,6 +2229,9 @@
 
     .session-item.kb-selected::before {
       width: 0;
+    }
+    .session-item.stale {
+      opacity: 0.6;
     }
   </style>
 </head>
@@ -2006,6 +2335,7 @@
             <h1 id="session-title" class="view-title">Session</h1>
             <p id="session-meta" class="view-meta"></p>
           </div>
+          <div id="latest-message" class="latest-message"></div>
           <div class="view-actions">
             <div class="view-progress">
               <div class="progress-bar">
@@ -2013,6 +2343,11 @@
               </div>
               <span id="progress-percent" class="progress-text">0%</span>
             </div>
+            <button id="message-toggle" class="icon-btn" onclick="toggleMessagePanel()" title="Session log (L)" aria-label="Toggle session log">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
             <button id="theme-toggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
               <svg id="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
@@ -2082,6 +2417,7 @@
 
     <!-- Detail panel -->
     <aside id="detail-panel" class="detail-panel">
+      <div class="panel-resize-handle" id="detail-panel-resize"></div>
       <header class="detail-header">
         <h3>Task Details</h3>
         <div style="display: flex; gap: 8px; align-items: center;">
@@ -2099,6 +2435,24 @@
       </header>
       <div id="detail-content" class="detail-content"></div>
     </aside>
+
+    <aside id="message-panel" class="message-panel">
+      <div class="panel-resize-handle" id="message-panel-resize"></div>
+      <header class="message-panel-header">
+        <h3>Session Log</h3>
+        <div style="display:flex;gap:4px;align-items:center;">
+        <button class="icon-btn" onclick="openLiveLatestMessage()" title="Follow latest message (Shift+M)" aria-label="Follow latest message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+        <button class="detail-close" onclick="toggleMessagePanel()" aria-label="Close message panel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+        </div>
+      </header>
+      <div id="message-panel-content" class="message-panel-content"></div>
+    </aside>
   </div>
 
   <script>
@@ -2111,17 +2465,27 @@
     let sessionLimit = '20';
     let filterProject = '__recent__'; // null = all, '__recent__' = last 24h, or project path
     let recentProjects = new Set();
+    let projectsCacheDirty = true;
+    const collapsedProjectGroups = new Set();
+    let stableGroupOrder = []; // cached project path order to prevent jumping
     let searchQuery = ''; // Search query for fuzzy search
     let allTasksCache = []; // Cache all tasks for search
     let bulkDeleteSessionId = null; // Track session for bulk delete
     let ownerFilter = '';
     let currentAgents = [];
+    let currentWaiting = null;
     let lastAgentsHash = '';
+    let messagePanelOpen = false;
+    let lastMessagesHash = '';
+    let lastInlineMessage = '';
+    let currentMessages = [];
     let agentDurationInterval = null;
     let selectedTaskId = null;
     let selectedSessionId = null;
     let focusZone = 'board'; // 'board' | 'sidebar'
     let selectedSessionIdx = -1;
+    let selectedSessionKbId = null;
+    let sessionJustSelected = false;
 
     function getUrlState() {
       const params = new URLSearchParams(window.location.search);
@@ -2133,6 +2497,7 @@
         project: params.get('project'),
         owner: params.get('owner'),
         search: params.get('search'),
+        messages: params.get('messages') === '1',
       };
     }
 
@@ -2145,6 +2510,7 @@
       if (filterProject && filterProject !== '__recent__') params.set('project', filterProject);
       if (ownerFilter) params.set('owner', ownerFilter);
       if (searchQuery) params.set('search', searchQuery);
+      if (messagePanelOpen) params.set('messages', '1');
       const qs = params.toString();
       const url = qs ? `?${qs}` : window.location.pathname;
       history.replaceState(null, '', url);
@@ -2214,7 +2580,7 @@
         console.log('[fetchSessions] Sessions loaded:', sessions.length);
         renderSessions();
         console.log('[fetchSessions] Render complete');
-        fetchLiveUpdates();
+        renderLiveUpdatesFromCache();
       } catch (error) {
         console.error('Failed to fetch sessions:', error);
       }
@@ -2433,18 +2799,12 @@
       return false;
     }
 
-    async function fetchLiveUpdates() {
-      try {
-        const res = await fetch('/api/tasks/all');
-        const allTasks = await res.json();
-        let activeTasks = allTasks.filter(t => t.status === 'in_progress' && !isInternalTask(t));
-        if (filterProject) {
-          activeTasks = activeTasks.filter(t => matchesProjectFilter(t.project));
-        }
-        renderLiveUpdates(activeTasks);
-      } catch (error) {
-        console.error('Failed to fetch live updates:', error);
+    function renderLiveUpdatesFromCache() {
+      let activeTasks = allTasksCache.filter(t => t.status === 'in_progress' && !isInternalTask(t));
+      if (filterProject) {
+        activeTasks = activeTasks.filter(t => matchesProjectFilter(t.project));
       }
+      renderLiveUpdates(activeTasks);
     }
 
     function renderLiveUpdates(activeTasks) {
@@ -2497,9 +2857,14 @@
         currentTasks = newTasks;
         currentSessionId = sessionId;
         ownerFilter = '';
+        lastMessagesHash = '';
+        lastInlineMessage = '';
+        document.getElementById('latest-message').classList.remove('visible');
+        sessionJustSelected = true;
         updateUrl();
         renderSession();
         fetchAgents(sessionId);
+        fetchMessages(sessionId);
       } catch (error) {
         console.error('Failed to fetch tasks:', error);
         currentTasks = [];
@@ -2511,21 +2876,221 @@
     }
 
     const AGENT_COOLDOWN_MS = 3 * 60 * 1000;
-    const AGENT_STALE_MS = 5 * 60 * 1000;
+    const AGENT_STALE_MS = 5 * 60 * 1000; // kept for reference; no longer used for force-stopping
+    const WAITING_TTL_MS = 5 * 60 * 1000;
     const AGENT_LOG_MAX = 8;
 
     async function fetchAgents(sessionId) {
       try {
         const res = await fetch(`/api/sessions/${sessionId}/agents`);
-        if (!res.ok) { currentAgents = []; renderAgentFooter(); return; }
-        const agents = await res.json();
-        const hash = JSON.stringify(agents);
+        if (!res.ok) { currentAgents = []; currentWaiting = null; renderAgentFooter(); return; }
+        const data = await res.json();
+        const agents = Array.isArray(data) ? data : (data.agents || []);
+        currentWaiting = data.waitingForUser || null;
+        const hash = JSON.stringify(data);
         if (hash === lastAgentsHash) return;
         lastAgentsHash = hash;
         currentAgents = agents;
         renderAgentFooter();
       } catch (e) {
         console.error('[fetchAgents]', e);
+      }
+    }
+
+    function toggleMessagePanel() {
+      const panel = document.getElementById('message-panel');
+      messagePanelOpen = !messagePanelOpen;
+      panel.classList.toggle('visible', messagePanelOpen);
+      document.getElementById('message-toggle')?.classList.toggle('active', messagePanelOpen);
+      if (messagePanelOpen && currentSessionId) {
+        if (currentMessages.length) renderMessages(currentMessages);
+        fetchMessages(currentSessionId);
+      }
+      updateUrl();
+    }
+
+    function openLiveLatestMessage() {
+      if (currentMessages.length) {
+        msgDetailFollowLatest = true;
+        showMsgDetail(currentMessages.length - 1);
+      }
+    }
+
+    async function fetchMessages(sessionId) {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/messages?limit=15`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const hash = JSON.stringify(data.messages);
+        if (hash === lastMessagesHash) return;
+        lastMessagesHash = hash;
+        currentMessages = data.messages;
+        updateLatestMessage(data.messages);
+        if (messagePanelOpen) renderMessages(data.messages);
+        if (msgDetailFollowLatest && data.messages.length) {
+          showMsgDetail(data.messages.length - 1);
+        }
+      } catch (e) {
+        console.error('[fetchMessages]', e);
+      }
+    }
+
+    function parseCommandMessage(text) {
+      const nameMatch = text.match(/<command-name>([^<]+)<\/command-name>/);
+      if (nameMatch) return nameMatch[1].trim();
+      const msgMatch = text.match(/<command-message>([^<]+)<\/command-message>/);
+      if (msgMatch) return '/' + msgMatch[1].trim();
+      return null;
+    }
+
+    function cleanMessageText(text) {
+      const cmd = parseCommandMessage(text);
+      if (cmd) return cmd;
+      return stripAnsi(text)
+        .replace(/<[^>]+>/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/^#+\s*/gm, '')
+        .replace(/\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function updateLatestMessage(messages) {
+      const el = document.getElementById('latest-message');
+      let last = null;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].type === 'assistant' || messages[i].type === 'user') { last = messages[i]; break; }
+      }
+      if (!last) { el.classList.remove('visible'); lastInlineMessage = ''; return; }
+      const label = last.type === 'assistant' ? 'Claude' : 'User';
+      const cleaned = cleanMessageText(last.text);
+      const text = cleaned.length > 120 ? cleaned.slice(0, 120) + '...' : cleaned;
+      const labelCls = last.type === 'assistant' ? 'lm-label lm-label-assistant' : 'lm-label';
+      const html = `<span class="${labelCls}">${escapeHtml(label)}:</span> ${escapeHtml(text)}`;
+      el.innerHTML = html;
+      el.classList.add('visible');
+      if (lastInlineMessage !== html) {
+        lastInlineMessage = html;
+        renderSessions();
+      }
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('message-panel-content');
+      if (!messages.length) {
+        container.innerHTML = '<div class="msg-empty">No messages found for this session</div>';
+        return;
+      }
+      container.innerHTML = messages.map((m, i) => {
+        const clickable = `onclick="msgDetailFollowLatest=false;showMsgDetail(${i})" style="cursor:pointer"`;
+        if (m.type === 'user') {
+          const cmd = parseCommandMessage(m.text);
+          const displayText = cmd ? cmd : escapeHtml(cleanMessageText(m.text));
+          const isCmd = !!cmd;
+          return `<div class="msg-item msg-user${isCmd ? ' msg-cmd' : ''}" ${clickable}>
+            <svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <div class="msg-body"><div class="msg-text">${isCmd ? '<code>' + escapeHtml(displayText) + '</code>' : displayText}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>
+          </div>`;
+        } else if (m.type === 'assistant') {
+          return `<div class="msg-item msg-assistant" ${clickable}>
+            <svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><path d="M12 2v4M8 7h8"/></svg>
+            <div class="msg-body"><div class="msg-text">${escapeHtml(cleanMessageText(m.text))}</div><div class="msg-time">${m.model ? escapeHtml(m.model) + ' · ' : ''}${formatDate(m.timestamp)}</div></div>
+          </div>`;
+        } else if (m.type === 'tool_use') {
+          const toolDetail = m.detail ? ` <span style="color:var(--text-muted)">${escapeHtml(m.detail)}</span>` : '';
+          const agentLink = m.tool === 'Agent' && m.agentId ? ` <span class="msg-agent-link" title="View agent" onclick="event.stopPropagation();showAgentModal('${escapeHtml(m.agentId)}')">⇗</span>` : '';
+          const itemClick = m.tool === 'Agent' && m.agentId
+            ? `onclick="showAgentModal('${escapeHtml(m.agentId)}')" style="cursor:pointer"`
+            : clickable;
+          return `<div class="msg-item msg-tool" ${itemClick}>
+            <svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <div class="msg-body"><div class="msg-text">${escapeHtml(m.tool)}${toolDetail}${agentLink}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>
+          </div>`;
+        }
+        return '';
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    let currentMsgDetailIdx = null;
+    let msgDetailFollowLatest = false;
+
+    function showMsgDetail(idx) {
+      currentMsgDetailIdx = idx;
+      const m = currentMessages[idx];
+      if (!m) return;
+      const body = document.getElementById('msg-detail-body');
+      if (m.type === 'tool_use') {
+        document.getElementById('msg-detail-title').textContent = m.tool;
+        const fullText = m.fullDetail || m.detail || '';
+        const descHtml = m.description && m.description !== fullText ? `<div style="margin-bottom:8px;color:var(--text-secondary);font-size:0.85rem">${escapeHtml(m.description)}</div>` : '';
+        let agentExtraHtml = '';
+        const agentBtn = document.getElementById('msg-detail-agent-btn');
+        if (m.tool === 'Agent' && m.agentId) {
+          const respHtml = m.agentLastMessage ? renderMarkdown(stripAnsi(m.agentLastMessage.trim())) : null;
+          const promptHtml = m.agentPrompt ? renderMarkdown(m.agentPrompt) : null;
+          agentExtraHtml += renderAgentTabs(promptHtml, respHtml);
+          agentBtn.style.display = '';
+          agentBtn.dataset.agentId = m.agentId;
+        } else {
+          agentBtn.style.display = 'none';
+        }
+        body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + agentExtraHtml;
+      } else {
+        const text = stripAnsi(m.fullText || m.text);
+        document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : 'User';
+        document.getElementById('msg-detail-agent-btn').style.display = 'none';
+        body.innerHTML = renderMarkdown(text);
+      }
+      const modal = document.getElementById('msg-detail-modal').querySelector('.modal');
+      const hasTable = body.querySelector('table') !== null;
+      modal.style.maxWidth = hasTable ? '1100px' : '860px';
+      modal.classList.toggle('live', msgDetailFollowLatest);
+      const overlay = document.getElementById('msg-detail-modal');
+      overlay.classList.toggle('live-overlay', msgDetailFollowLatest);
+
+      const meta = [formatDate(m.timestamp)];
+      if (m.model) meta.unshift(m.model);
+      document.getElementById('msg-detail-meta').textContent = meta.join(' · ');
+      overlay.classList.add('visible');
+    }
+
+    function closeMsgDetailModal() {
+      document.getElementById('msg-detail-modal').classList.remove('visible');
+      msgDetailFollowLatest = false;
+    }
+
+    async function copyMsgToClipboard(btn) {
+      const m = currentMessages[currentMsgDetailIdx];
+      if (!m) return;
+      const content = m.type === 'tool_use'
+        ? (m.fullDetail || m.detail || '')
+        : stripAnsi(m.fullText || m.text);
+      try {
+        await navigator.clipboard.writeText(content);
+        const svg = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>';
+        setTimeout(() => btn.innerHTML = svg, 1500);
+      } catch (e) {
+        console.error('Failed to copy:', e);
+      }
+    }
+
+    async function openMsgInEditor() {
+      const m = currentMessages[currentMsgDetailIdx];
+      if (!m) return;
+      const content = m.type === 'tool_use'
+        ? (m.fullDetail || m.detail || '')
+        : stripAnsi(m.fullText || m.text);
+      const title = m.type === 'tool_use' ? m.tool : m.type;
+      try {
+        await fetch('/api/open-in-editor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, title })
+        });
+      } catch (e) {
+        console.error('Failed to open in editor:', e);
       }
     }
 
@@ -2543,13 +3108,7 @@
       const label = document.getElementById('agent-footer-label');
       const now = Date.now();
 
-      // Mark stale "active" agents as stopped (SubagentStop unreliable for shutdown agents)
-      const agents = currentAgents.map(a => {
-        if (a.status === 'active' && a.startedAt && (now - new Date(a.startedAt).getTime()) > AGENT_STALE_MS) {
-          return { ...a, status: 'stopped', stoppedAt: a.updatedAt };
-        }
-        return a;
-      });
+      const agents = currentAgents;
       // Filter shutdown ghosts: for same-type agents, keep if they overlapped (parallel)
       // or started >30s after previous stopped (legitimate re-spawn). Filter the rest.
       const byType = {};
@@ -2564,7 +3123,8 @@
           const curStart = new Date(group[i].startedAt || 0).getTime();
           const overlapped = curStart < prevStop;
           const reSpawn = curStart - prevStop > 30000;
-          if (overlapped || reSpawn) filtered.push(group[i]);
+          const isActive = group[i].status === 'active' || group[i].status === 'idle';
+          if (overlapped || reSpawn || isActive) filtered.push(group[i]);
         }
       }
       // Sort by updatedAt desc, keep up to 7 most recent
@@ -2572,7 +3132,10 @@
         .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
         .slice(0, AGENT_LOG_MAX);
 
-      if (visible.length === 0) {
+      const permFresh = currentWaiting && currentWaiting.timestamp &&
+        (now - new Date(currentWaiting.timestamp).getTime()) < WAITING_TTL_MS;
+
+      if (visible.length === 0 && !permFresh) {
         footer.classList.remove('visible');
         clearInterval(agentDurationInterval);
         agentDurationInterval = null;
@@ -2586,7 +3149,11 @@
       footer.classList.toggle('collapsed', collapsed);
       document.getElementById('agent-footer-toggle').innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;';
 
-      content.innerHTML = visible.map(a => {
+      const permHtml = permFresh
+        ? `<div class="permission-badge">${currentWaiting.kind === 'question' ? '❓ Question pending' : '⏳ Awaiting: ' + escapeHtml(currentWaiting.toolName || 'unknown')}</div>`
+        : '';
+
+      content.innerHTML = permHtml + visible.map(a => {
         const elapsed = a.status === 'stopped' && a.stoppedAt
           ? new Date(a.stoppedAt).getTime() - new Date(a.startedAt || a.stoppedAt).getTime()
           : now - new Date(a.startedAt || a.updatedAt).getTime();
@@ -2595,7 +3162,7 @@
           : a.status === 'idle'
           ? `idle · ${formatDuration(elapsed)}`
           : `active · ${formatDuration(elapsed)}`;
-        const msgTrimmed = a.lastMessage?.trim() || '';
+        const msgTrimmed = stripAnsi(a.lastMessage?.trim() || '').replace(/[\r\n]+/g, ' ');
         const msgTrunc = msgTrimmed.length > 60 ? msgTrimmed.substring(0, 60) + '…' : msgTrimmed;
         const msgHtml = msgTrunc
           ? `<div class="agent-message" title="${escapeHtml(msgTrimmed)}">${escapeHtml(msgTrunc)}</div>` : '';
@@ -2649,20 +3216,17 @@
       if (started) rows.push(['Started', started.toLocaleTimeString()]);
       if (stopped) rows.push(['Stopped', stopped.toLocaleTimeString()]);
 
+      const agentMsg = currentMessages.find(m => m.tool === 'Agent' && m.agentId === agentId);
+
       let html = `<table style="width:100%;border-collapse:collapse;">` +
         rows.map(([k, v]) =>
           `<tr><td style="padding:6px 12px 6px 0;color:var(--text-tertiary);white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:6px 0;color:var(--text-primary);">${v}</td></tr>`
         ).join('') + `</table>`;
 
-      if (agent.lastMessage) {
-        const sanitized = typeof DOMPurify !== 'undefined' && typeof marked !== 'undefined'
-          ? DOMPurify.sanitize(marked.parse(agent.lastMessage.trim()))
-          : `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(agent.lastMessage.trim())}</pre>`;
-        html += `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Last Message</div>
-          <div class="detail-desc" style="font-size:13px;">${sanitized}</div>
-        </div>`;
-      }
+      const prompt = agentMsg?.agentPrompt || agent.prompt;
+      const promptHtml = prompt ? renderMarkdown(prompt) : null;
+      const responseHtml = agent.lastMessage ? renderMarkdown(stripAnsi(agent.lastMessage.trim())) : null;
+      html += renderAgentTabs(promptHtml, responseHtml);
 
       body.innerHTML = html;
       modal.classList.add('visible');
@@ -2685,9 +3249,10 @@
         viewMode = 'all';
         currentSessionId = null;
         ownerFilter = '';
-        currentAgents = []; lastAgentsHash = ''; renderAgentFooter();
+        currentAgents = []; currentWaiting = null; lastAgentsHash = ''; renderAgentFooter();
         const res = await fetch('/api/tasks/all');
-        let tasks = await res.json();
+        allTasksCache = await res.json();
+        let tasks = allTasksCache;
         if (filterProject) {
           tasks = tasks.filter(t => matchesProjectFilter(t.project));
         }
@@ -2695,6 +3260,7 @@
         updateUrl();
         renderAllTasks();
         renderSessions();
+        renderLiveUpdatesFromCache();
       } catch (error) {
         console.error('Failed to fetch all tasks:', error);
       }
@@ -2726,9 +3292,26 @@
       // Update project dropdown
       updateProjectDropdown();
 
+      const LIVE_INDICATOR_MS = 10 * 1000;
       let filteredSessions = sessions;
       if (sessionFilter === 'active') {
-        filteredSessions = filteredSessions.filter(s => s.pending > 0 || s.inProgress > 0 || s.hasPlan);
+        const ACTIVE_PLAN_MS = 15 * 60 * 1000;
+        const RECENTLY_MODIFIED_MS = 5 * 60 * 1000;
+        const now = Date.now();
+        const activeSessionIds = new Set();
+        filteredSessions = filteredSessions.filter(s => {
+          const isActive = s.hasMessages && (s.pending > 0 || s.inProgress > 0 || s.hasActiveAgents || s.hasWaitingForUser || s.hasRecentLog ||
+            (s.hasPlan && !s.planImplementationSessionId && (now - new Date(s.modifiedAt).getTime()) <= ACTIVE_PLAN_MS) ||
+            (now - new Date(s.modifiedAt).getTime()) <= RECENTLY_MODIFIED_MS);
+          if (isActive) activeSessionIds.add(s.id);
+          return isActive;
+        });
+        // Include plan sessions whose implementation is active
+        const planSessions = sessions.filter(s => s.planImplementationSessionId && activeSessionIds.has(s.planImplementationSessionId) && !activeSessionIds.has(s.id));
+        if (planSessions.length) {
+          filteredSessions = filteredSessions.concat(planSessions);
+          filteredSessions.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+        }
       }
       if (filterProject) {
         filteredSessions = filteredSessions.filter(s => matchesProjectFilter(s.project));
@@ -2783,34 +3366,30 @@
         return;
       }
 
-      sessionsList.innerHTML = filteredSessions.map(session => {
+      // Helper to render a single session card
+      const renderSessionCard = (session) => {
         const total = session.taskCount;
         const percent = total > 0 ? Math.round((session.completed / total) * 100) : 0;
         const isActive = session.id === currentSessionId && viewMode === 'session';
         const hasInProgress = session.inProgress > 0;
+        const isLive = hasInProgress || (session.modifiedAt && (Date.now() - new Date(session.modifiedAt).getTime()) <= LIVE_INDICATOR_MS);
         const sessionName = session.name || session.id;
-        const projectName = session.project ? session.project.split('/').pop() : null;
-        const primaryName = projectName || sessionName;
-        const secondaryName = projectName ? sessionName : null;
+        const useGrouped = sessionFilter === 'active' && session.project;
+        const primaryName = useGrouped ? sessionName : (session.project ? session.project.split('/').pop() : sessionName);
+        const secondaryName = useGrouped ? null : (session.project ? sessionName : null);
 
-        // Format git branch for display
         const gitBranch = session.gitBranch ? escapeHtml(session.gitBranch) : null;
-
-        // Format timestamps for display
         const createdDisplay = session.createdAt ? formatDate(session.createdAt) : '';
         const modifiedDisplay = formatDate(session.modifiedAt);
         const timeDisplay = session.createdAt && createdDisplay !== modifiedDisplay
           ? `Created ${createdDisplay} · Modified ${modifiedDisplay}`
           : modifiedDisplay;
-
-        // Build tooltip
-        const tooltip = [timeDisplay, gitBranch ? `Branch: ${gitBranch}` : ''].filter(Boolean).join(' | ');
-
+        const tooltip = [session.id, timeDisplay, gitBranch ? `Branch: ${gitBranch}` : ''].filter(Boolean).join(' | ');
         const isTeam = session.isTeam;
         const memberCount = session.memberCount || 0;
 
         return `
-          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''}" title="${tooltip}">
+          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''} ${!session.hasRecentLog && !session.inProgress && !session.hasWaitingForUser ? 'stale' : ''}" title="${tooltip}">
             <div class="session-name">${escapeHtml(primaryName)}</div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
             ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
@@ -2820,7 +3399,10 @@
                 ${isTeam ? `<span class="team-badge" title="${memberCount} team members"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${memberCount}</span>` : ''}
                 ${(isTeam || session.project) ? `<span class="team-info-btn" onclick="event.stopPropagation(); showSessionInfoModal('${session.id}')" title="View session info">ℹ</span>` : ''}
                 ${session.hasPlan ? `<span class="plan-indicator" onclick="event.stopPropagation(); openPlanForSession('${session.id}')" title="View plan"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>` : ''}
-                ${hasInProgress ? '<span class="pulse"></span>' : ''}
+                ${session.hasRunningAgents ? '<span class="agent-badge" title="Active agents">🤖</span>' : ''}
+                ${session.planSourceSessionId ? `<span class="plan-indicator" title="Implements plan — click to view plan session" onclick="event.stopPropagation(); fetchTasks('${escapeHtml(session.planSourceSessionId)}')">📋</span>` : ''}
+                ${session.hasWaitingForUser ? '<span class="agent-badge" title="Waiting for user">❓</span>' : ''}
+                ${isLive ? '<span class="pulse"></span>' : ''}
               </span>
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
               <span class="progress-text">${session.completed}/${total}</span>
@@ -2828,19 +3410,104 @@
             <div class="session-time">${formatDate(session.modifiedAt)}</div>
           </button>
         `;
-      }).join('');
+      };
+
+      // Group active sessions by project
+      if (sessionFilter === 'active') {
+        const groups = new Map();
+        const ungrouped = [];
+        for (const session of filteredSessions) {
+          if (session.project) {
+            if (!groups.has(session.project)) groups.set(session.project, []);
+            groups.get(session.project).push(session);
+          } else {
+            ungrouped.push(session);
+          }
+        }
+
+        // Stable group order: preserve existing order, append new groups sorted by recency
+        const currentPaths = new Set(groups.keys());
+        const knownPaths = new Set(stableGroupOrder);
+        const keptOrder = stableGroupOrder.filter(p => currentPaths.has(p));
+        const newPaths = [...currentPaths].filter(p => !knownPaths.has(p));
+        if (newPaths.length > 1) {
+          const maxTime = new Map(newPaths.map(p => [p, Math.max(...groups.get(p).map(s => new Date(s.modifiedAt).getTime()))]));
+          newPaths.sort((a, b) => maxTime.get(b) - maxTime.get(a));
+        }
+        stableGroupOrder = [...keptOrder, ...newPaths];
+        const sortedGroups = stableGroupOrder.map(p => [p, groups.get(p)]);
+
+        let html = '';
+        for (const [projectPath, projectSessions] of sortedGroups) {
+          const folderName = projectPath.split(/[/\\]/).pop();
+          const isCollapsed = collapsedProjectGroups.has(projectPath);
+          const escapedPath = escapeHtml(projectPath);
+          const breadcrumbParts = projectPath.replace(/^\/home\/[^/]+/, '~').split(/[/\\]/).filter(Boolean);
+          const breadcrumbHtml = breadcrumbParts.map((p, i) => i < breadcrumbParts.length - 1 ? `${escapeHtml(p)}<span class="sep">/</span>` : escapeHtml(p)).join('');
+
+          html += `
+            <div class="project-group-header${isCollapsed ? ' collapsed' : ''}" data-group-path="${escapedPath}">
+              <svg class="group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              <span class="group-name">${escapeHtml(folderName)}</span>
+              <span class="group-count">${projectSessions.length}</span>
+              <span class="group-path-toggle" data-group-action="toggle-path" title="Show full path">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </span>
+            </div>
+            <div class="project-group-breadcrumb" data-full-path="${escapedPath}" title="Click to copy path">${breadcrumbHtml}</div>
+            <div class="project-group-sessions${isCollapsed ? ' collapsed' : ''}">
+              ${projectSessions.map(renderSessionCard).join('')}
+            </div>
+          `;
+        }
+
+        if (ungrouped.length > 0 && sortedGroups.length > 0) {
+          const isCollapsed = collapsedProjectGroups.has('__ungrouped__');
+          html += `
+            <div class="project-group-header${isCollapsed ? ' collapsed' : ''}" data-group-path="__ungrouped__">
+              <svg class="group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              <span class="group-name">Ungrouped</span>
+              <span class="group-count">${ungrouped.length}</span>
+            </div>
+            <div class="project-group-sessions${isCollapsed ? ' collapsed' : ''}">
+              ${ungrouped.map(renderSessionCard).join('')}
+            </div>
+          `;
+        } else {
+          html += ungrouped.map(renderSessionCard).join('');
+        }
+
+        sessionsList.innerHTML = html;
+      } else {
+        sessionsList.innerHTML = filteredSessions.map(renderSessionCard).join('');
+      }
 
       const items = getSessionItems();
       const activeIdx = items.findIndex(el => el.classList.contains('active'));
-      if (activeIdx >= 0) selectedSessionIdx = activeIdx;
+      if (activeIdx >= 0 && (selectedSessionIdx < 0 || sessionJustSelected)) {
+        selectedSessionIdx = activeIdx;
+        selectedSessionKbId = items[activeIdx].dataset.sessionId || null;
+        sessionJustSelected = false;
+      }
 
-      if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
+      if (selectedSessionKbId && focusZone === 'sidebar') {
+        const restoredIdx = items.findIndex(el => el.dataset.sessionId === selectedSessionKbId);
+        if (restoredIdx >= 0) {
+          selectedSessionIdx = restoredIdx;
+          items[restoredIdx].classList.add('kb-selected');
+        } else {
+          selectedSessionIdx = -1;
+          selectedSessionKbId = null;
+        }
+      } else if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
         if (items.length > 0) {
           const clamped = Math.min(selectedSessionIdx, items.length - 1);
           selectedSessionIdx = clamped;
+          selectedSessionKbId = items[clamped].dataset.sessionId || null;
           items[clamped].classList.add('kb-selected');
         } else {
           selectedSessionIdx = -1;
+          selectedSessionKbId = null;
         }
       }
     }
@@ -2852,28 +3519,17 @@
       const session = sessions.find(s => s.id === currentSessionId);
       if (!session) return;
 
-      const displayName = session.name || currentSessionId;
+      const displayName = session.customTitle || session.name || session.gitBranch || session.description || currentSessionId;
 
-      // Create header with delete button
-      sessionTitle.innerHTML = `
-        <span style="flex: 1;">${escapeHtml(displayName)}</span>
-        <button class="icon-btn icon-btn-danger" onclick="deleteAllSessionTasks('${session.id}')" title="Delete all tasks in this session">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-        </button>
-      `;
+      sessionTitle.textContent = displayName;
 
-      // Build meta text with project path, branch, and description
+      // Build meta text with project path and description
       const projectName = session.project ? session.project.split('/').pop() : null;
       const metaParts = [`${currentTasks.length} tasks`];
       if (projectName) {
         metaParts.push(projectName);
       }
-      if (session.gitBranch) {
-        metaParts.push(session.gitBranch);
-      }
-      if (session.description) {
+      if (session.description && session.gitBranch) {
         metaParts.push(session.description);
       }
       metaParts.push(formatDate(session.modifiedAt));
@@ -2958,6 +3614,9 @@
           selectedTaskId = null;
           selectedSessionId = null;
         }
+        if (selectedTaskId && detailPanel.classList.contains('visible')) {
+          showTaskDetail(selectedTaskId, selectedSessionId);
+        }
       }
     }
 
@@ -3035,6 +3694,7 @@
       const prev = sessionsList.querySelector('.session-item.kb-selected');
       if (prev) prev.classList.remove('kb-selected');
       selectedSessionIdx = Math.max(0, Math.min(idx, items.length - 1));
+      selectedSessionKbId = items[selectedSessionIdx].dataset.sessionId || null;
       items[selectedSessionIdx].classList.add('kb-selected');
       items[selectedSessionIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
@@ -3050,6 +3710,28 @@
       if (newIdx >= 0 && newIdx < items.length) {
         selectSessionByIndex(newIdx);
       }
+    }
+
+    function setGroupCollapsed(header, collapsed) {
+      if (!header) return;
+      const projectPath = header.dataset.groupPath;
+      if (collapsed === collapsedProjectGroups.has(projectPath)) return;
+      if (collapsed) collapsedProjectGroups.add(projectPath);
+      else collapsedProjectGroups.delete(projectPath);
+      header.classList.toggle('collapsed', collapsed);
+      let el = header.nextElementSibling;
+      while (el && !el.classList.contains('project-group-sessions')) el = el.nextElementSibling;
+      if (el) el.classList.toggle('collapsed', collapsed);
+    }
+
+    function toggleSelectedSessionGroup(collapse) {
+      const items = getSessionItems();
+      if (selectedSessionIdx < 0 || selectedSessionIdx >= items.length) return;
+      const container = items[selectedSessionIdx].closest('.project-group-sessions');
+      if (!container) return;
+      let header = container.previousElementSibling;
+      while (header && !header.classList.contains('project-group-header')) header = header.previousElementSibling;
+      setGroupCollapsed(header, collapse);
     }
 
     function activateSelectedSession() {
@@ -3076,11 +3758,16 @@
         }
         sidebar.classList.add('sidebar-focused');
         const items = getSessionItems();
-        if (selectedSessionIdx < 0 && items.length > 0) {
+        if (items.length > 0) {
           const activeIdx = items.findIndex(el => el.classList.contains('active'));
-          selectSessionByIndex(activeIdx >= 0 ? activeIdx : 0);
-        } else if (items.length > 0) {
-          selectSessionByIndex(selectedSessionIdx);
+          if (activeIdx >= 0) {
+            selectSessionByIndex(activeIdx);
+          } else if (selectedSessionKbId) {
+            const restoredIdx = items.findIndex(el => el.dataset.sessionId === selectedSessionKbId);
+            selectSessionByIndex(restoredIdx >= 0 ? restoredIdx : 0);
+          } else {
+            selectSessionByIndex(0);
+          }
         }
       } else {
         // Session changed while in sidebar — reset stale selection
@@ -3180,7 +3867,7 @@
 
         <div class="detail-section">
           <div class="detail-label">Description</div>
-          <div class="detail-desc">${task.description ? DOMPurify.sanitize(marked.parse(task.description)) : '<em style="color: var(--text-muted);">No description</em>'}</div>
+          <div class="detail-desc">${task.description ? renderMarkdown(task.description) : '<em style="color: var(--text-muted);">No description</em>'}</div>
         </div>
 
         ${task.activeForm && task.status === 'in_progress' ? `
@@ -3500,11 +4187,11 @@
     }
 
     async function refreshCurrentView() {
-      fetchLiveUpdates();
       if (viewMode === 'all') {
         await showAllTasks();
       } else if (currentSessionId) {
         await fetchTasks(currentSessionId);
+        renderLiveUpdatesFromCache();
       } else {
         await fetchSessions();
       }
@@ -3517,11 +4204,38 @@
         return;
       }
 
-      if (document.querySelector('.modal-overlay.visible')) return;
+      if (document.querySelector('.modal-overlay.visible')) {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.modal-overlay.visible').forEach(m => m.classList.remove('visible'));
+          msgDetailFollowLatest = false;
+        } else if ((e.key === 'M' || e.key === 'm') && e.shiftKey && document.getElementById('msg-detail-modal').classList.contains('visible')) {
+          e.preventDefault();
+          closeMsgDetailModal();
+        }
+        return;
+      }
 
       if (e.key === '[') {
         e.preventDefault();
         toggleSidebar();
+        return;
+      }
+
+      if ((e.key === 'L' || e.key === 'l') && e.shiftKey) {
+        e.preventDefault();
+        toggleMessagePanel();
+        return;
+      }
+
+      if ((e.key === 'M' || e.key === 'm') && e.shiftKey) {
+        e.preventDefault();
+        const msgDetailModal = document.getElementById('msg-detail-modal');
+        if (msgDetailModal.classList.contains('visible')) {
+          closeMsgDetailModal();
+        } else if (currentMessages.length) {
+          msgDetailFollowLatest = true;
+          showMsgDetail(currentMessages.length - 1);
+        }
         return;
       }
 
@@ -3542,6 +4256,16 @@
         if (e.key === 'k' || e.key === 'ArrowUp') {
           e.preventDefault();
           navigateSession(-1);
+          return;
+        }
+        if (e.key === 'h' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          toggleSelectedSessionGroup(true);
+          return;
+        }
+        if (e.key === 'l' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          toggleSelectedSessionGroup(false);
           return;
         }
         if (e.key === 'Enter' || e.key === ' ') {
@@ -3605,8 +4329,9 @@
         return;
       }
 
-      if (e.key === 'Escape' && detailPanel.classList.contains('visible')) {
-        closeDetailPanel();
+      if (e.key === 'Escape') {
+        if (detailPanel.classList.contains('visible')) closeDetailPanel();
+        else if (messagePanelOpen) toggleMessagePanel();
       }
 
       if (e.key === 'p' || e.key === 'P') {
@@ -3637,12 +4362,19 @@
     function setupEventSource() {
       let retryDelay = 1000;
       let eventSource;
+      let wasConnected = false;
 
       function connect() {
         eventSource = new EventSource('/api/events');
 
         eventSource.onopen = () => {
-          retryDelay = 1000; // Reset on successful connection
+          if (wasConnected) {
+            console.warn('[SSE] Reconnected after drop — forcing full refresh');
+            fetchSessions().catch(() => {});
+            if (currentSessionId) fetchTasks(currentSessionId);
+          }
+          wasConnected = true;
+          retryDelay = 1000;
           connectionStatus.innerHTML = `
             <span class="connection-dot live"></span>
             <span>Connected</span>
@@ -3651,30 +4383,50 @@
 
         eventSource.onerror = () => {
           eventSource.close();
+          console.warn('[SSE] Connection lost, retrying in', retryDelay, 'ms');
           connectionStatus.innerHTML = `
             <span class="connection-dot error"></span>
             <span>Reconnecting...</span>
           `;
           setTimeout(connect, retryDelay);
-          retryDelay = Math.min(retryDelay * 2, 30000); // Max 30s
+          retryDelay = Math.min(retryDelay * 2, 30000);
         };
 
-        let refreshTimer = null;
+        let taskRefreshTimer = null;
+        let metadataRefreshTimer = null;
+        let pendingTaskSessionIds = new Set();
+
         function debouncedRefresh(sessionId, isMetadata) {
-          clearTimeout(refreshTimer);
-          const delay = isMetadata ? 2000 : 500;
-          refreshTimer = setTimeout(() => {
-            fetchSessions().catch(err => console.error('[SSE] fetchSessions failed:', err));
-            if (currentSessionId && (isMetadata || sessionId === currentSessionId)) {
-              fetchTasks(currentSessionId);
-            }
-          }, delay);
+          if (isMetadata) {
+            clearTimeout(metadataRefreshTimer);
+            metadataRefreshTimer = setTimeout(() => {
+              fetchSessions().catch(err => console.error('[SSE] fetchSessions failed:', err));
+              if (currentSessionId) fetchMessages(currentSessionId);
+            }, 2000);
+          } else {
+            pendingTaskSessionIds.add(sessionId);
+            clearTimeout(taskRefreshTimer);
+            taskRefreshTimer = setTimeout(async () => {
+              await fetchSessions().catch(err => console.error('[SSE] fetchSessions failed:', err));
+              if (viewMode === 'all') {
+                currentTasks = filterProject
+                  ? allTasksCache.filter(t => matchesProjectFilter(t.project))
+                  : allTasksCache;
+                renderAllTasks();
+                renderLiveUpdatesFromCache();
+              } else if (currentSessionId && pendingTaskSessionIds.has(currentSessionId)) {
+                fetchTasks(currentSessionId);
+              }
+              pendingTaskSessionIds.clear();
+            }, 500);
+          }
         }
 
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
           console.log('[SSE] Event received:', data);
           if (data.type === 'update' || data.type === 'metadata-update') {
+            if (data.type === 'metadata-update') projectsCacheDirty = true;
             debouncedRefresh(data.sessionId, data.type === 'metadata-update');
           }
 
@@ -3683,6 +4435,7 @@
           }
 
           if (data.type === 'agent-update') {
+            fetchSessions().catch(err => console.error('[SSE] fetchSessions failed:', err));
             if (currentSessionId && data.sessionId === currentSessionId) {
               fetchAgents(currentSessionId);
             }
@@ -3691,12 +4444,14 @@
           if (data.type === 'team-update') {
             console.log('[SSE] Team update:', data.teamName);
             debouncedRefresh(data.teamName, false);
-            if (currentSessionId && data.teamName === currentSessionId) {
-              fetchTasks(currentSessionId);
-            }
           }
         };
       }
+
+      // Fallback poll every 30s in case SSE silently drops
+      setInterval(() => {
+        fetchSessions().catch(() => {});
+      }, 30000);
 
       connect();
     }
@@ -3712,10 +4467,44 @@
       return date.toLocaleDateString();
     }
 
+    function stripAnsi(text) {
+      return typeof text === 'string' ? text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') : text;
+    }
+
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function renderMarkdown(text) {
+      if (typeof DOMPurify !== 'undefined' && typeof marked !== 'undefined') {
+        return DOMPurify.sanitize(marked.parse(text));
+      }
+      return `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(text)}</pre>`;
+    }
+
+    function renderAgentTabs(promptHtml, responseHtml) {
+      const tabs = [];
+      const panels = [];
+      const id = 'at-' + Math.random().toString(36).slice(2, 8);
+      if (promptHtml) {
+        tabs.push({ key: 'prompt', label: 'Prompt' });
+        panels.push({ key: 'prompt', html: promptHtml });
+      }
+      if (responseHtml) {
+        tabs.push({ key: 'response', label: 'Response' });
+        panels.push({ key: 'response', html: responseHtml });
+      }
+      if (!tabs.length) return '';
+      const defaultTab = responseHtml ? 'response' : tabs[0].key;
+      const tabsHtml = tabs.map(t =>
+        `<div class="agent-tab${t.key === defaultTab ? ' active' : ''}" data-tab-group="${id}" data-tab-key="${t.key}" onclick="document.querySelectorAll('[data-tab-group=\\'${id}\\']').forEach(el=>{el.classList.toggle('active',el.dataset.tabKey==='${t.key}')})">${t.label}</div>`
+      ).join('');
+      const panelsHtml = panels.map(p =>
+        `<div class="agent-tab-panel${p.key === defaultTab ? ' active' : ''}" data-tab-group="${id}" data-tab-key="${p.key}"><div class="detail-desc rendered-md" style="font-size:13px;">${p.html}</div></div>`
+      ).join('');
+      return `<div class="agent-tabs">${tabsHtml}</div>${panelsHtml}`;
     }
 
     const ownerColors = [
@@ -3762,16 +4551,49 @@
       return project === filterProject;
     }
 
+    // Event delegation for project group interactions
+    document.addEventListener('click', (e) => {
+      const pathToggle = e.target.closest('[data-group-action="toggle-path"]');
+      if (pathToggle) {
+        e.stopPropagation();
+        const header = pathToggle.closest('.project-group-header');
+        let el = header?.nextElementSibling;
+        while (el && !el.classList.contains('project-group-breadcrumb')) el = el.nextElementSibling;
+        if (el) el.classList.toggle('expanded');
+        return;
+      }
+
+      const breadcrumb = e.target.closest('.project-group-breadcrumb');
+      if (breadcrumb) {
+        e.stopPropagation();
+        const path = breadcrumb.dataset.fullPath;
+        if (path) navigator.clipboard.writeText(path).catch(() => {});
+        return;
+      }
+
+      const header = e.target.closest('.project-group-header');
+      if (header) {
+        setGroupCollapsed(header, !collapsedProjectGroups.has(header.dataset.groupPath));
+      }
+    });
+
     function filterByProject(project) {
       filterProject = project || null;
       updateUrl();
       renderSessions();
-      fetchLiveUpdates();
       showAllTasks();
     }
 
+    let projectsCache = null;
+
     async function updateProjectDropdown() {
       const dropdown = document.getElementById('project-filter');
+
+      if (!projectsCacheDirty && projectsCache) {
+        renderProjectDropdown(dropdown, projectsCache);
+        return;
+      }
+
       let projects;
       try {
         const res = await fetch('/api/projects');
@@ -3781,11 +4603,18 @@
           .map(p => ({ path: p, modifiedAt: null }));
       }
 
+      projectsCache = projects;
+      projectsCacheDirty = false;
+
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
       recentProjects = new Set(
         projects.filter(p => p.modifiedAt && new Date(p.modifiedAt).getTime() > cutoff).map(p => p.path)
       );
 
+      renderProjectDropdown(dropdown, projects);
+    }
+
+    function renderProjectDropdown(dropdown, projects) {
       const recentSelected = filterProject === '__recent__' ? ' selected' : '';
       dropdown.innerHTML =
         '<option value="">All Projects</option>' +
@@ -3899,6 +4728,44 @@
       }
     }
 
+    function initPanelResize(panelId, handleId, cssVar, storageKey) {
+      const panel = document.getElementById(panelId);
+      const handle = document.getElementById(handleId);
+      let startX, startWidth;
+
+      handle.addEventListener('mousedown', (e) => {
+        startX = e.clientX;
+        startWidth = panel.offsetWidth;
+        panel.classList.add('resizing');
+        handle.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      });
+
+      function onMove(e) {
+        const w = Math.min(900, Math.max(320, startWidth - (e.clientX - startX)));
+        panel.style.setProperty(cssVar, w + 'px');
+      }
+
+      function onUp() {
+        panel.classList.remove('resizing');
+        handle.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        localStorage.setItem(storageKey, panel.style.getPropertyValue(cssVar));
+      }
+    }
+
+    function loadPanelWidths() {
+      [['detail-panel', '--detail-panel-width'], ['message-panel', '--message-panel-width']].forEach(([id, cssVar]) => {
+        const w = localStorage.getItem(id + '-width');
+        if (w) document.getElementById(id).style.setProperty(cssVar, w);
+      });
+    }
+
     function loadPreferences() {
       document.getElementById('session-filter').value = sessionFilter;
       document.getElementById('session-limit').value = sessionLimit;
@@ -3946,32 +4813,35 @@
       const titleEl = document.getElementById('team-modal-title');
       const bodyEl = document.getElementById('team-modal-body');
 
-      titleEl.textContent = teamConfig
+      const titleText = teamConfig
         ? `Team: ${teamConfig.team_name || teamConfig.name || 'Unknown'}`
         : (session.name || session.slug || session.id);
+      titleEl.innerHTML = escapeHtml(titleText) + (session.modifiedAt
+        ? `<div style="font-size: 12px; font-weight: 400; color: var(--text-tertiary); margin-top: 2px;">${formatDate(session.modifiedAt)} (${new Date(session.modifiedAt).toLocaleString()})</div>`
+        : '');
 
       let html = '';
 
       // Session & project details as compact key-value rows
       const infoRows = [];
-      infoRows.push(['Session', `<span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; user-select: all;">${escapeHtml(session.id)}</span>`]);
-      if (session.modifiedAt) {
-        const d = new Date(session.modifiedAt);
-        infoRows.push(['Last Modified', `${formatDate(session.modifiedAt)} <span style="font-size: 10px; color: var(--text-tertiary);">(${d.toLocaleString()})</span>`]);
-      }
+      infoRows.push(['Session', session.id]);
       if (session.project) {
         const projectName = session.project.split(/[/\\]/).pop();
-        infoRows.push(['Project', `${escapeHtml(projectName)}<br><span style="font-size: 10px; color: var(--text-tertiary);">${escapeHtml(session.project)}</span>`]);
+        infoRows.push(['Project', projectName]);
+        infoRows.push(['Path', session.project]);
         if (session.gitBranch) {
-          infoRows.push(['Branch', escapeHtml(session.gitBranch)]);
+          infoRows.push(['Branch', session.gitBranch]);
         }
         if (session.description) {
-          infoRows.push(['Description', escapeHtml(session.description)]);
+          infoRows.push(['Description', session.description]);
         }
       }
-      html += `<div class="team-modal-meta" style="margin-bottom: 16px; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: baseline;">`;
+      html += `<div class="team-modal-meta" style="margin-bottom: 16px; display: grid; grid-template-columns: auto 1fr auto; gap: 6px 12px; align-items: center;">`;
       infoRows.forEach(([label, value]) => {
-        html += `<span style="font-weight: 500; color: var(--text-secondary); font-size: 12px; white-space: nowrap;">${label}</span><span>${value}</span>`;
+        const copyVal = escapeHtml(value).replace(/"/g, '&quot;');
+        html += `<span style="font-weight: 500; color: var(--text-secondary); font-size: 12px; white-space: nowrap;">${label}</span>`;
+        html += `<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; user-select: all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${copyVal}">${escapeHtml(value)}</span>`;
+        html += `<button onclick="navigator.clipboard.writeText('${copyVal.replace(/'/g, "\\'")}'); this.textContent='✓'; setTimeout(() => this.textContent='Copy', 1000)" style="padding: 2px 8px; font-size: 11px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Copy</button>`;
       });
       html += `</div>`;
 
@@ -4068,7 +4938,7 @@
           if (data?.content) {
             _pendingPlanContent = data.content;
             const body = document.getElementById('plan-modal-body');
-            body.innerHTML = DOMPurify.sanitize(marked.parse(_pendingPlanContent));
+            body.innerHTML = renderMarkdown(_pendingPlanContent);
           }
         })
         .catch(() => {});
@@ -4088,9 +4958,8 @@
     function openPlanModal() {
       if (!_pendingPlanContent) return;
       const body = document.getElementById('plan-modal-body');
-      body.innerHTML = DOMPurify.sanitize(marked.parse(_pendingPlanContent));
+      body.innerHTML = renderMarkdown(_pendingPlanContent);
       document.getElementById('plan-modal').classList.add('visible');
-
       const keyHandler = (e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -4171,6 +5040,9 @@
 
     loadSidebarState();
     initSidebarResize();
+    loadPanelWidths();
+    initPanelResize('detail-panel', 'detail-panel-resize', '--detail-panel-width', 'detail-panel-width');
+    initPanelResize('message-panel', 'message-panel-resize', '--message-panel-width', 'message-panel-width');
     fetch('/api/version').then(r => r.json()).then(d => {
       document.getElementById('sidebar-footer').textContent = 'v' + d.version;
     }).catch(() => {});
@@ -4190,11 +5062,14 @@
       document.getElementById('search-clear-btn').classList.add('visible');
     }
 
-    fetchSessions().then(() => {
+    fetchSessions().then(async () => {
       if (urlState.session) {
-        fetchTasks(urlState.session);
+        await fetchTasks(urlState.session);
       } else {
         showAllTasks();
+      }
+      if (urlState.messages && currentSessionId) {
+        toggleMessagePanel();
       }
     });
 
@@ -4208,8 +5083,36 @@
       loadPreferences();
       if (s.session) fetchTasks(s.session);
       else showAllTasks();
+      if (s.messages !== messagePanelOpen) toggleMessagePanel();
     });
   </script>
+
+  <!-- Message Detail Modal -->
+  <div id="msg-detail-modal" class="modal-overlay" onclick="closeMsgDetailModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 860px; width: 90vw; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="msg-detail-title">Message</h3>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button id="msg-detail-agent-btn" class="icon-btn" aria-label="View Agent" title="View Agent" style="display:none" onclick="closeMsgDetailModal();showAgentModal(this.dataset.agentId)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><rect x="4" y="10" width="16" height="10" rx="2"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/><path d="M12 2v4"/><path d="M2 14h2"/><path d="M20 14h2"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="Copy to clipboard" title="Copy to clipboard" onclick="copyMsgToClipboard(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="Open in editor" title="Open in editor" onclick="openMsgInEditor()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="modal-close" aria-label="Close" onclick="closeMsgDetailModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body" style="flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
+        <div id="msg-detail-body" class="rendered-md" style="word-break: break-word; font-size: 13px; line-height: 1.6; overflow-y: auto; flex: 0 1 auto; min-height: 0;"></div>
+        <div id="msg-detail-meta" style="margin-top: 12px; font-size: 11px; color: var(--text-muted); flex-shrink: 0;"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Help Modal -->
   <div id="help-modal" class="modal-overlay" onclick="closeHelpModal()">
@@ -4284,6 +5187,14 @@
               <tr>
                 <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">D</kbd></td>
                 <td style="padding: 4px 0; color: var(--text-primary);">Delete selected task</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Shift+L</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Toggle session log</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: var(--text-secondary);"><kbd style="background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Shift+M</kbd></td>
+                <td style="padding: 4px 0; color: var(--text-primary);">Open last message detail</td>
               </tr>
             </table>
           </div>
@@ -4361,7 +5272,7 @@
 
   <!-- Team Info Modal -->
   <div id="team-modal" class="modal-overlay" onclick="closeTeamModal()">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 520px; max-height: 80vh; display: flex; flex-direction: column;">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 640px; max-height: 80vh; display: flex; flex-direction: column;">
       <div class="modal-header">
         <h3 id="team-modal-title" class="modal-title">Team</h3>
         <button class="modal-close" aria-label="Close dialog" onclick="closeTeamModal()">
@@ -4370,7 +5281,7 @@
           </svg>
         </button>
       </div>
-      <div id="team-modal-body" class="modal-body" style="overflow-y: auto; flex: 1;"></div>
+      <div id="team-modal-body" class="modal-body" style="overflow-y: auto; flex: 0 1 auto; min-height: 0;"></div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeTeamModal()">Close</button>
       </div>
@@ -4389,7 +5300,7 @@
           </svg>
         </button>
       </div>
-      <div id="plan-modal-body" class="modal-body detail-desc" style="overflow-y: auto; flex: 1;"></div>
+      <div id="plan-modal-body" class="modal-body detail-desc rendered-md" style="overflow-y: auto; flex: 0 1 auto; min-height: 0;"></div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closePlanModal()">Close</button>
       </div>
@@ -4433,7 +5344,7 @@
           </svg>
         </button>
       </div>
-      <div id="agent-modal-body" class="modal-body" style="overflow-y: auto; flex: 1;"></div>
+      <div id="agent-modal-body" class="modal-body" style="overflow-y: auto; overflow-x: hidden; flex: 0 1 auto; min-height: 0;"></div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeAgentModal()">Close</button>
       </div>

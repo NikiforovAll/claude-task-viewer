@@ -8,6 +8,12 @@ const readline = require('readline');
 const chokidar = require('chokidar');
 const os = require('os');
 
+const {
+  readRecentMessages: _readRecentMessagesUncached,
+  readSessionInfoFromJsonl,
+  buildAgentProgressMap
+} = require('./lib/parsers');
+
 const isSetupCommand = process.argv.includes('--install') || process.argv.includes('--uninstall');
 
 if (isSetupCommand) {
@@ -43,6 +49,60 @@ const TEAMS_DIR = path.join(CLAUDE_DIR, 'teams');
 const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
 const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
 
+const PERMISSION_TTL_MS = 1800000;
+const AGENT_TTL_MS = 3600000;
+const AGENT_STALE_MS = 300000;
+
+const WAITING_RESOLVE_GRACE_MS = 5000;
+
+function checkWaitingForUser(agentDir, logMtime) {
+  try {
+    const data = JSON.parse(readFileSync(path.join(agentDir, '_waiting.json'), 'utf8'));
+    if (data.status === 'waiting' && data.timestamp) {
+      const waitTime = new Date(data.timestamp).getTime();
+      const age = Date.now() - waitTime;
+      if (age >= PERMISSION_TTL_MS) return null;
+      // After grace period, check if session resumed activity (user already responded)
+      if (logMtime && age >= WAITING_RESOLVE_GRACE_MS && logMtime > waitTime + WAITING_RESOLVE_GRACE_MS) return null;
+      return data;
+    }
+  } catch (e) { /* skip — missing or invalid */ }
+  return null;
+}
+
+function isAgentFresh(agent) {
+  if (!agent.updatedAt) return true;
+  return (Date.now() - new Date(agent.updatedAt).getTime()) < AGENT_TTL_MS;
+}
+
+function getSessionLogStat(meta) {
+  if (!meta.jsonlPath) return { mtime: null, hasMessages: false };
+  try {
+    const st = statSync(meta.jsonlPath);
+    return { mtime: st.mtimeMs, hasMessages: st.size > 1000 };
+  } catch (e) { return { mtime: null, hasMessages: false }; }
+}
+
+function checkAgentStatus(agentDir, stale, logMtime) {
+  const result = { hasActive: false, hasRunning: false, waitingForUser: null };
+  if (!existsSync(agentDir) || stale) return result;
+  try {
+    result.waitingForUser = checkWaitingForUser(agentDir, logMtime);
+    if (result.waitingForUser) result.hasActive = true;
+    for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
+      try {
+        const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
+        if (isAgentFresh(agent)) {
+          if (agent.status === 'active') { result.hasActive = true; result.hasRunning = true; }
+          else if (agent.status === 'idle') { result.hasActive = true; }
+        }
+        if (result.hasRunning && result.hasActive) break;
+      } catch (e) { /* skip invalid */ }
+    }
+  } catch (e) { /* ignore */ }
+  return result;
+}
+
 function isTeamSession(sessionId) {
   return existsSync(path.join(TEAMS_DIR, sessionId, 'config.json'));
 }
@@ -72,62 +132,95 @@ let sessionMetadataCache = {};
 let lastMetadataRefresh = 0;
 const METADATA_CACHE_TTL = 10000; // 10 seconds
 
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
+function isSafeId(id) {
+  return typeof id === 'string' && id.length > 0 && id.length <= 128 && SAFE_ID_RE.test(id);
+}
+
+app.param('sessionId', (req, res, next, val) => {
+  if (!isSafeId(val)) return res.status(400).json({ error: 'Invalid session ID' });
+  next();
+});
+app.param('taskId', (req, res, next, val) => {
+  if (!isSafeId(val)) return res.status(400).json({ error: 'Invalid task ID' });
+  next();
+});
+
 // Parse JSON bodies
 app.use(express.json());
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-/**
- * Read customTitle and slug from a JSONL file
- * Returns { customTitle, slug } - customTitle from /rename, slug from session
- */
-function readSessionInfoFromJsonl(jsonlPath) {
-  const result = { customTitle: null, slug: null, projectPath: null };
+const messageCache = new Map();
+const MESSAGE_CACHE_TTL = 5000;
+const MAX_CACHE_ENTRIES = 200;
+const progressMapCache = new Map();
+const taskCountsCache = new Map();
 
-  try {
-    if (!existsSync(jsonlPath)) return result;
+function evictStaleCache(cache) {
+  if (cache.size <= MAX_CACHE_ENTRIES) return;
+  const oldest = cache.keys().next().value;
+  if (oldest !== undefined) cache.delete(oldest);
+}
 
-    // Read first 64KB - should contain custom-title and at least one message with slug/cwd
-    const fd = require('fs').openSync(jsonlPath, 'r');
-    const buffer = Buffer.alloc(65536);
-    const bytesRead = require('fs').readSync(fd, buffer, 0, 65536, 0);
-    require('fs').closeSync(fd);
+function getTaskCounts(sessionPath) {
+  const cached = taskCountsCache.get(sessionPath);
+  if (cached) return cached;
 
-    const content = buffer.toString('utf8', 0, bytesRead);
-    const lines = content.split('\n');
+  const taskFiles = readdirSync(sessionPath).filter(f => f.endsWith('.json'));
+  let completed = 0, inProgress = 0, pending = 0, newestTaskMtime = null;
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line);
-
-        // Check for custom-title entry (from /rename command)
-        if (data.type === 'custom-title' && data.customTitle) {
-          result.customTitle = data.customTitle;
-        }
-
-        // Check for slug in user/assistant messages
-        if (data.slug && !result.slug) {
-          result.slug = data.slug;
-        }
-
-        // Extract project path from cwd field (actual path, no encoding issues)
-        if (data.cwd && !result.projectPath) {
-          result.projectPath = data.cwd;
-        }
-
-        // Stop early if we found all three
-        if (result.customTitle && result.slug && result.projectPath) break;
-      } catch (e) {
-        // Skip malformed lines
+  for (const file of taskFiles) {
+    try {
+      const taskPath = path.join(sessionPath, file);
+      const task = JSON.parse(readFileSync(taskPath, 'utf8'));
+      if (task.metadata && task.metadata._internal) continue;
+      if (task.status === 'completed') completed++;
+      else if (task.status === 'in_progress') inProgress++;
+      else pending++;
+      const taskStat = statSync(taskPath);
+      if (!newestTaskMtime || taskStat.mtime > newestTaskMtime) {
+        newestTaskMtime = taskStat.mtime;
       }
-    }
-  } catch (e) {
-    // Return partial results
+    } catch (e) { /* skip invalid */ }
   }
 
+  const result = { taskCount: taskFiles.length, completed, inProgress, pending, newestTaskMtime };
+  taskCountsCache.set(sessionPath, result);
   return result;
+}
+
+function getProgressMap(jsonlPath) {
+  try {
+    const cached = progressMapCache.get(jsonlPath);
+    if (cached && Date.now() - cached.ts < MESSAGE_CACHE_TTL) return cached.map;
+    const st = statSync(jsonlPath);
+    if (cached && cached.mtime === st.mtimeMs) {
+      cached.ts = Date.now();
+      return cached.map;
+    }
+    const map = buildAgentProgressMap(jsonlPath);
+    progressMapCache.set(jsonlPath, { map, mtime: st.mtimeMs, ts: Date.now() });
+    evictStaleCache(progressMapCache);
+    return map;
+  } catch (_) { return {}; }
+}
+
+function readRecentMessages(jsonlPath, limit = 10) {
+  try {
+    const stat = statSync(jsonlPath);
+    const cached = messageCache.get(jsonlPath);
+    if (cached && cached.mtime === stat.mtimeMs && Date.now() - cached.ts < MESSAGE_CACHE_TTL) {
+      return cached.messages;
+    }
+    const messages = _readRecentMessagesUncached(jsonlPath, limit);
+    messageCache.set(jsonlPath, { messages, mtime: stat.mtimeMs, ts: Date.now() });
+    evictStaleCache(messageCache);
+    return messages;
+  } catch (e) {
+    return [];
+  }
 }
 
 /**
@@ -168,9 +261,10 @@ function loadSessionMetadata() {
         }
 
         metadata[sessionId] = {
-          customTitle: sessionInfo.customTitle,
           slug: sessionInfo.slug,
           project: sessionInfo.projectPath || null,
+          gitBranch: sessionInfo.gitBranch || null,
+          customTitle: sessionInfo.customTitle || null,
           jsonlPath: jsonlPath
         };
         sessionIds.push(sessionId);
@@ -196,14 +290,14 @@ function loadSessionMetadata() {
             if (entry.sessionId) {
               if (!metadata[entry.sessionId]) {
                 metadata[entry.sessionId] = {
-                  customTitle: null,
                   slug: null,
                   project: entry.projectPath || null,
                   jsonlPath: null
                 };
               }
               metadata[entry.sessionId].description = entry.description || null;
-              metadata[entry.sessionId].gitBranch = entry.gitBranch || null;
+              if (entry.gitBranch) metadata[entry.sessionId].gitBranch = entry.gitBranch;
+              if (entry.customTitle) metadata[entry.sessionId].customTitle = entry.customTitle;
               metadata[entry.sessionId].created = entry.created || null;
             }
           }
@@ -229,8 +323,7 @@ function loadSessionMetadata() {
           const project = parentMeta?.project || leadMember?.cwd || teamConfig.working_dir || null;
 
           metadata[dir.name] = {
-            customTitle: teamConfig.description || dir.name,
-            slug: null,
+            slug: teamConfig.description || dir.name,
             project,
             jsonlPath: parentMeta?.jsonlPath || null,
             description: teamConfig.description || parentMeta?.description || null,
@@ -249,9 +342,6 @@ function loadSessionMetadata() {
   return metadata;
 }
 
-/**
- * Get display name for a session: customTitle > slug > null (frontend shows UUID)
- */
 function getPlanInfo(slug) {
   if (!slug) return { hasPlan: false, planTitle: null };
   const planPath = path.join(PLANS_DIR, `${slug}.md`);
@@ -268,7 +358,7 @@ function getPlanInfo(slug) {
 function getSessionDisplayName(sessionId, meta) {
   if (meta?.customTitle) return meta.customTitle;
   if (meta?.slug) return meta.slug;
-  return null; // Frontend will show UUID as fallback
+  return null;
 }
 
 // API: List all sessions
@@ -294,42 +384,33 @@ app.get('/api/sessions', async (req, res) => {
         if (entry.isDirectory()) {
           const sessionPath = path.join(TASKS_DIR, entry.name);
           const stat = statSync(sessionPath);
-          const taskFiles = readdirSync(sessionPath).filter(f => f.endsWith('.json'));
-
-          // Get task summary and find newest task file
-          let completed = 0;
-          let inProgress = 0;
-          let pending = 0;
-          let newestTaskMtime = null;
-
-          for (const file of taskFiles) {
-            try {
-              const taskPath = path.join(sessionPath, file);
-              const task = JSON.parse(readFileSync(taskPath, 'utf8'));
-              if (task.metadata && task.metadata._internal) continue;
-              if (task.status === 'completed') completed++;
-              else if (task.status === 'in_progress') inProgress++;
-              else pending++;
-
-              // Track newest task file mtime
-              const taskStat = statSync(taskPath);
-              if (!newestTaskMtime || taskStat.mtime > newestTaskMtime) {
-                newestTaskMtime = taskStat.mtime;
-              }
-            } catch (e) {
-              // Skip invalid files
-            }
-          }
+          const { taskCount, completed, inProgress, pending, newestTaskMtime } = getTaskCounts(sessionPath);
 
           // Get metadata for this session
           const meta = metadata[entry.name] || {};
 
-          // Use newest task file mtime, or fall back to directory mtime if no tasks
-          const modifiedAt = newestTaskMtime ? newestTaskMtime.toISOString() : stat.mtime.toISOString();
+          const logStat = getSessionLogStat(meta);
+          const logMtime = logStat.mtime;
+          const logAge = logMtime ? Date.now() - logMtime : Infinity;
+          const stale = logAge > AGENT_STALE_MS;
+
+          // Use newest of: task file mtime, JSONL mtime, directory mtime
+          let modifiedAt = newestTaskMtime ? newestTaskMtime.toISOString() : stat.mtime.toISOString();
+          if (logMtime) {
+            const jsonlMtime = new Date(logMtime).toISOString();
+            if (jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
+          }
 
           const isTeam = isTeamSession(entry.name);
           const memberCount = isTeam ? (loadTeamConfig(entry.name)?.members?.length || 0) : 0;
           const planInfo = getPlanInfo(meta.slug);
+
+          const resolvedAgentDir = (() => {
+            const tc = loadTeamConfig(entry.name);
+            const rid = (tc && tc.leadSessionId) ? tc.leadSessionId : entry.name;
+            return path.join(AGENT_ACTIVITY_DIR, rid);
+          })();
+          const agentStatus = checkAgentStatus(resolvedAgentDir, stale, logMtime);
 
           sessionsMap.set(entry.name, {
             id: entry.name,
@@ -338,7 +419,8 @@ app.get('/api/sessions', async (req, res) => {
             project: meta.project || null,
             description: meta.description || null,
             gitBranch: meta.gitBranch || null,
-            taskCount: taskFiles.length,
+            customTitle: meta.customTitle || null,
+            taskCount,
             completed,
             inProgress,
             pending,
@@ -346,6 +428,11 @@ app.get('/api/sessions', async (req, res) => {
             modifiedAt: modifiedAt,
             isTeam,
             memberCount,
+            hasMessages: logStat.hasMessages,
+            hasActiveAgents: agentStatus.hasActive,
+            hasRunningAgents: agentStatus.hasRunning,
+            hasWaitingForUser: !!agentStatus.waitingForUser,
+            hasRecentLog: logAge <= AGENT_STALE_MS,
             ...planInfo
           });
         }
@@ -355,11 +442,18 @@ app.get('/api/sessions', async (req, res) => {
     // Add sessions from metadata that don't have task directories
     for (const [sessionId, meta] of Object.entries(metadata)) {
       if (!sessionsMap.has(sessionId)) {
+        const logStat = getSessionLogStat(meta);
+        const logMtime = logStat.mtime;
+        const logAge = logMtime ? Date.now() - logMtime : Infinity;
+        const stale = logAge > AGENT_STALE_MS;
         let modifiedAt = meta.created || null;
-        if (!modifiedAt && meta.jsonlPath) {
-          try { modifiedAt = statSync(meta.jsonlPath).mtime.toISOString(); } catch (e) {}
+        if (logMtime) {
+          const jsonlMtime = new Date(logMtime).toISOString();
+          if (!modifiedAt || jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
         }
         const planInfo = getPlanInfo(meta.slug);
+        const metaAgentDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
+        const metaAgentStatus = checkAgentStatus(metaAgentDir, stale, logMtime);
         sessionsMap.set(sessionId, {
           id: sessionId,
           name: getSessionDisplayName(sessionId, meta),
@@ -367,6 +461,7 @@ app.get('/api/sessions', async (req, res) => {
           project: meta.project || null,
           description: meta.description || null,
           gitBranch: meta.gitBranch || null,
+          customTitle: meta.customTitle || null,
           taskCount: 0,
           completed: 0,
           inProgress: 0,
@@ -375,9 +470,48 @@ app.get('/api/sessions', async (req, res) => {
           modifiedAt: modifiedAt || new Date(0).toISOString(),
           isTeam: false,
           memberCount: 0,
+          hasMessages: logStat.hasMessages,
+          hasActiveAgents: metaAgentStatus.hasActive,
+          hasRunningAgents: metaAgentStatus.hasRunning,
+          hasWaitingForUser: !!metaAgentStatus.waitingForUser,
+          hasRecentLog: logAge <= AGENT_STALE_MS,
           ...planInfo
         });
       }
+    }
+
+    // Add sessions from agent-activity that have _waiting.json but no tasks/metadata
+    if (existsSync(AGENT_ACTIVITY_DIR)) {
+      try {
+        for (const dir of readdirSync(AGENT_ACTIVITY_DIR, { withFileTypes: true })) {
+          if (!dir.isDirectory() || sessionsMap.has(dir.name)) continue;
+          const agentDir = path.join(AGENT_ACTIVITY_DIR, dir.name);
+          const meta = metadata[dir.name] || {};
+          const logStat = getSessionLogStat(meta);
+          const waiting = checkWaitingForUser(agentDir, logStat.mtime);
+          if (!waiting) continue;
+          sessionsMap.set(dir.name, {
+            id: dir.name,
+            name: getSessionDisplayName(dir.name, meta),
+            slug: meta.slug || null,
+            project: meta.project || null,
+            description: meta.description || null,
+            gitBranch: meta.gitBranch || null,
+            customTitle: meta.customTitle || null,
+            taskCount: 0,
+            completed: 0,
+            inProgress: 0,
+            pending: 0,
+            createdAt: meta.created || null,
+            modifiedAt: waiting.timestamp || new Date().toISOString(),
+            isTeam: false,
+            memberCount: 0,
+            hasMessages: logStat.hasMessages,
+            hasActiveAgents: true,
+            hasWaitingForUser: true,
+          });
+        }
+      } catch (e) { /* ignore */ }
     }
 
     // Hide leader UUID sessions that are represented by a team session
@@ -392,6 +526,26 @@ app.get('/api/sessions', async (req, res) => {
       const session = sessionsMap.get(leaderId);
       if (session && session.taskCount === 0) {
         sessionsMap.delete(leaderId);
+      }
+    }
+
+    // Correlate plan sessions with their implementation sessions (same slug)
+    const slugGroups = new Map();
+    for (const [sid, session] of sessionsMap) {
+      if (session.slug) {
+        if (!slugGroups.has(session.slug)) slugGroups.set(session.slug, []);
+        slugGroups.get(session.slug).push(session);
+      }
+    }
+    for (const [slug, group] of slugGroups) {
+      if (group.length < 2) continue;
+      group.sort((a, b) => new Date(a.modifiedAt) - new Date(b.modifiedAt));
+      const planSession = group.find(s => s.hasPlan);
+      const implSession = group.find(s => s !== planSession && new Date(s.modifiedAt) >= new Date(planSession?.modifiedAt || 0));
+      if (planSession && implSession) {
+        planSession.hasWaitingForUser = false;
+        planSession.planImplementationSessionId = implSession.id;
+        implSession.planSourceSessionId = planSession.id;
       }
     }
 
@@ -418,13 +572,13 @@ app.get('/api/projects', (req, res) => {
   const projectMap = {};
   for (const meta of Object.values(metadata)) {
     if (!meta.project) continue;
-    const mtime = meta.jsonlPath ? (() => { try { return statSync(meta.jsonlPath).mtime; } catch (e) { return null; } })() : null;
+    const mtime = getSessionLogStat(meta).mtime;
     if (!projectMap[meta.project] || (mtime && mtime > projectMap[meta.project])) {
       projectMap[meta.project] = mtime;
     }
   }
   const projects = Object.entries(projectMap)
-    .map(([path, mtime]) => ({ path, modifiedAt: mtime ? mtime.toISOString() : null }))
+    .map(([path, mtime]) => ({ path, modifiedAt: mtime ? new Date(mtime).toISOString() : null }))
     .sort((a, b) => a.path.localeCompare(b.path));
   res.json(projects);
 });
@@ -491,11 +645,30 @@ app.post('/api/sessions/:sessionId/plan/open', (req, res) => {
     if (!existsSync(planPath)) return res.status(404).json({ error: 'No plan found' });
 
     const editor = process.env.EDITOR || 'code';
-    require('child_process').exec(`${editor} "${planPath}"`);
+    require('child_process').spawn(editor, [planPath], { shell: true, stdio: 'ignore', detached: true }).unref();
     res.json({ success: true });
   } catch (error) {
     console.error('Error opening plan in VS Code:', error);
     res.status(500).json({ error: 'Failed to open plan' });
+  }
+});
+
+// API: Open content in editor as temp file
+app.post('/api/open-in-editor', (req, res) => {
+  try {
+    const { content, title } = req.body;
+    if (!content) return res.status(400).json({ error: 'No content provided' });
+
+    const safeName = (title || 'message').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
+    const tmpFile = path.join(os.tmpdir(), `claude-kanban-${safeName}-${Date.now()}.md`);
+    require('fs').writeFileSync(tmpFile, content, 'utf8');
+
+    const editor = process.env.EDITOR || 'code';
+    require('child_process').spawn(editor, [tmpFile], { shell: true, stdio: 'ignore', detached: true }).unref();
+    res.json({ success: true, path: tmpFile });
+  } catch (error) {
+    console.error('Error opening in editor:', error);
+    res.status(500).json({ error: 'Failed to open in editor' });
   }
 });
 
@@ -515,19 +688,88 @@ app.get('/api/sessions/:sessionId/agents', (req, res) => {
     sessionId = teamConfig.leadSessionId;
   }
   const agentDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
-  if (!existsSync(agentDir)) return res.json([]);
+  if (!existsSync(agentDir)) return res.json({ agents: [], waitingForUser: null });
   try {
-    const files = readdirSync(agentDir).filter(f => f.endsWith('.json'));
+    const metadata = loadSessionMetadata();
+    const meta = metadata[sessionId] || {};
+    const logMtime = getSessionLogStat(meta).mtime;
+    const sessionStale = logMtime ? (Date.now() - logMtime) > AGENT_STALE_MS : true;
+
+    const files = readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'));
     const agents = [];
     for (const file of files) {
       try {
-        agents.push(JSON.parse(readFileSync(path.join(agentDir, file), 'utf8')));
+        const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
+        const agentStale = !sessionStale && agent.updatedAt && (Date.now() - new Date(agent.updatedAt).getTime()) > AGENT_STALE_MS;
+        if (!isAgentFresh(agent) || sessionStale || agentStale) {
+          if (agent.status === 'active' || agent.status === 'idle') {
+            agent.status = 'stopped';
+            if (!agent.stoppedAt) agent.stoppedAt = agent.updatedAt || agent.startedAt;
+          }
+        }
+        agents.push(agent);
       } catch (e) { /* skip invalid */ }
     }
-    res.json(agents);
+    const agentsNeedingPrompt = agents.filter(a => !a.prompt);
+    if (agentsNeedingPrompt.length && meta.jsonlPath) {
+      try {
+        const progressMap = getProgressMap(meta.jsonlPath);
+        const byAgentId = {};
+        for (const entry of Object.values(progressMap)) {
+          if (entry.prompt && !byAgentId[entry.agentId]) byAgentId[entry.agentId] = entry.prompt;
+        }
+        for (const agent of agentsNeedingPrompt) {
+          const prompt = byAgentId[agent.agentId];
+          if (prompt) {
+            agent.prompt = prompt;
+            const agentFile = path.join(agentDir, agent.agentId + '.json');
+            fs.writeFile(agentFile, JSON.stringify(agent), 'utf8').catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
+    const waitingForUser = checkWaitingForUser(agentDir, logMtime);
+    res.json({ agents, waitingForUser });
   } catch (e) {
-    res.json([]);
+    res.json({ agents: [], waitingForUser: null });
   }
+});
+
+app.get('/api/sessions/:sessionId/messages', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
+  const metadata = loadSessionMetadata();
+  const meta = metadata[req.params.sessionId];
+  const jsonlPath = meta?.jsonlPath;
+  if (!jsonlPath) return res.json({ messages: [], sessionId: req.params.sessionId });
+  const messages = readRecentMessages(jsonlPath, limit);
+  const agentMessages = messages.filter(m => m.tool === 'Agent' && m.toolUseId);
+  if (agentMessages.length) {
+    const progressMap = getProgressMap(jsonlPath);
+    let sessionId = req.params.sessionId;
+    const teamConfig = loadTeamConfig(sessionId);
+    if (teamConfig && teamConfig.leadSessionId) sessionId = teamConfig.leadSessionId;
+    const agentDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
+    for (const msg of agentMessages) {
+      const entry = progressMap[msg.toolUseId];
+      if (entry) {
+        msg.agentId = entry.agentId;
+        if (entry.prompt && !msg.agentPrompt) msg.agentPrompt = entry.prompt;
+        try {
+          const agentFile = path.join(agentDir, entry.agentId + '.json');
+          const agent = JSON.parse(readFileSync(agentFile, 'utf8'));
+          if (agent.lastMessage) msg.agentLastMessage = agent.lastMessage;
+          if (agent.prompt && !msg.agentPrompt) msg.agentPrompt = agent.prompt;
+          const prompt = msg.agentPrompt || entry.prompt;
+          if (prompt && !agent.prompt) {
+            agent.prompt = prompt;
+            fs.writeFile(agentFile, JSON.stringify(agent), 'utf8').catch(() => {});
+          }
+        } catch (_) {}
+      }
+      delete msg.toolUseId;
+    }
+  }
+  res.json({ messages, sessionId: req.params.sessionId });
 });
 
 app.get('/api/version', (req, res) => {
@@ -675,9 +917,14 @@ app.get('/api/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   clients.add(res);
+  console.log(`[SSE] Client connected (total: ${clients.size})`);
+
+  const heartbeat = setInterval(() => res.write(':heartbeat\n\n'), 30000);
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     clients.delete(res);
+    console.log(`[SSE] Client disconnected (total: ${clients.size})`);
   });
 
   // Send initial ping
@@ -710,6 +957,8 @@ watcher.on('all', (event, filePath) => {
   if ((event === 'add' || event === 'change' || event === 'unlink') && filePath.endsWith('.json')) {
     const relativePath = path.relative(TASKS_DIR, filePath);
     const sessionId = relativePath.split(path.sep)[0];
+
+    taskCountsCache.delete(path.join(TASKS_DIR, sessionId));
 
     broadcast({
       type: 'update',
@@ -782,14 +1031,14 @@ const agentActivityWatcher = chokidar.watch(AGENT_ACTIVITY_DIR, {
 const AGENT_FILE_CAP = 20;
 
 agentActivityWatcher.on('all', (event, filePath) => {
-  if ((event === 'add' || event === 'change') && filePath.endsWith('.json')) {
+  if ((event === 'add' || event === 'change' || event === 'unlink') && filePath.endsWith('.json')) {
     const relativePath = path.relative(AGENT_ACTIVITY_DIR, filePath);
     const sessionId = relativePath.split(path.sep)[0];
     // Cleanup: if session dir exceeds cap, delete oldest files by mtime
     if (event === 'add') {
       try {
         const sessionDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
-        const files = readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+        const files = readdirSync(sessionDir).filter(f => f.endsWith('.json') && !f.startsWith('_'));
         if (files.length > AGENT_FILE_CAP) {
           const withStats = files.map(f => {
             const fp = path.join(sessionDir, f);
@@ -818,6 +1067,32 @@ agentActivityWatcher.on('all', (event, filePath) => {
     }
   }
 });
+
+// Cleanup agent-activity folders older than 2 days
+const CLEANUP_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+
+async function cleanupAgentActivity() {
+  try {
+    const entries = await fs.readdir(AGENT_ACTIVITY_DIR, { withFileTypes: true });
+    const now = Date.now();
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      try {
+        const dirPath = path.join(AGENT_ACTIVITY_DIR, entry.name);
+        const contents = await fs.readdir(dirPath);
+        const stat = await fs.stat(dirPath);
+        const age = now - stat.mtimeMs;
+        if ((contents.length === 0 && age > AGENT_STALE_MS) || age > CLEANUP_MAX_AGE_MS) {
+          await fs.rm(dirPath, { recursive: true, force: true });
+        }
+      } catch (e) { /* ignore per-folder errors */ }
+    }
+  } catch (e) { /* agent-activity dir may not exist */ }
+}
+
+cleanupAgentActivity();
+setInterval(cleanupAgentActivity, CLEANUP_INTERVAL_MS);
 
 const server = app.listen(PORT, () => {
     const actualPort = server.address().port;

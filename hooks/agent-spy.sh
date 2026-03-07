@@ -4,13 +4,46 @@
 
 INPUT=$(cat)
 
-SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
-AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty')
-EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
+# Single jq call to extract all routing fields (was 3-4 separate calls)
+eval "$(echo "$INPUT" | jq -r '
+  @sh "SESSION_ID=\(.session_id // "")",
+  @sh "AGENT_ID=\(.agent_id // "")",
+  @sh "EVENT=\(.hook_event_name // "")",
+  @sh "TOOL_NAME=\(.tool_name // "")",
+  @sh "AGENT_TYPE_RAW=\(.agent_type // "")"
+')"
 
-[ -z "$SESSION_ID" ] || [ -z "$AGENT_ID" ] && exit 0
+[ -z "$SESSION_ID" ] && exit 0
 
-AGENT_TYPE_RAW=$(echo "$INPUT" | jq -r '.agent_type // empty')
+# PostToolUse / non-waiting PreToolUse: clear waiting state
+if [ "$EVENT" = "PostToolUse" ] || { [ "$EVENT" = "PreToolUse" ] && [ "$TOOL_NAME" != "AskUserQuestion" ]; }; then
+  WFILE="$HOME/.claude/agent-activity/$SESSION_ID/_waiting.json"
+  rm -f "$WFILE"
+  [ "$EVENT" = "PostToolUse" ] && exit 0
+fi
+
+# Plan mode tools don't fire PostToolUse — skip to avoid stale markers
+[ "$TOOL_NAME" = "EnterPlanMode" ] || [ "$TOOL_NAME" = "ExitPlanMode" ] && exit 0
+
+# Waiting-for-user events → write _waiting.json marker
+if [ "$EVENT" = "PermissionRequest" ] || { [ "$EVENT" = "PreToolUse" ] && [ "$TOOL_NAME" = "AskUserQuestion" ]; }; then
+  DIR="$HOME/.claude/agent-activity/$SESSION_ID"
+  mkdir -p "$DIR"
+  KIND="permission"
+  [ "$EVENT" = "PreToolUse" ] && KIND="question"
+  TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  echo "$INPUT" | jq -c --arg kind "$KIND" --arg ts "$TS" '{
+    status: "waiting",
+    kind: $kind,
+    toolName: (.tool_name // "unknown"),
+    toolInput: ((.tool_input | tostring)[0:200] // ""),
+    timestamp: $ts
+  }' > "$DIR/_waiting.json"
+  exit 0
+fi
+
+[ -z "$AGENT_ID" ] && exit 0
+
 DIR="$HOME/.claude/agent-activity/$SESSION_ID"
 FILE="$DIR/$AGENT_ID.json"
 
@@ -33,27 +66,26 @@ if [ "$EVENT" = "SubagentStart" ]; then
 EOF
 
 elif [ "$EVENT" = "SubagentStop" ]; then
-  # Read type and startedAt from existing file if available
   AGENT_TYPE="$AGENT_TYPE_RAW"
   STARTED_AT="$TS"
   if [ -f "$FILE" ]; then
-    [ -z "$AGENT_TYPE" ] && AGENT_TYPE=$(jq -r '.type // "unknown"' "$FILE")
-    STARTED_AT=$(jq -r '.startedAt // empty' "$FILE")
-    [ -z "$STARTED_AT" ] && STARTED_AT="$TS"
+    eval "$(jq -r '@sh "PREV_TYPE=\(.type // "unknown")", @sh "PREV_START=\(.startedAt // "")"' "$FILE")"
+    [ -z "$AGENT_TYPE" ] && AGENT_TYPE="$PREV_TYPE"
+    [ -n "$PREV_START" ] && STARTED_AT="$PREV_START"
   fi
-  LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // ""')
-  LAST_MSG_ESC=$(echo "$LAST_MSG" | jq -Rs '.')
-  cat > "$FILE" <<EOF
-{"agentId":"$AGENT_ID","type":"$AGENT_TYPE","status":"stopped","startedAt":"$STARTED_AT","lastMessage":$LAST_MSG_ESC,"stoppedAt":"$TS","updatedAt":"$TS"}
-EOF
+  echo "$INPUT" | jq -c \
+    --arg id "$AGENT_ID" --arg type "$AGENT_TYPE" --arg started "$STARTED_AT" --arg ts "$TS" \
+    '{agentId: $id, type: $type, status: "stopped", startedAt: $started,
+      lastMessage: (.last_assistant_message // ""), stoppedAt: $ts, updatedAt: $ts}' \
+    > "$FILE"
 
 elif [ "$EVENT" = "TeammateIdle" ]; then
   AGENT_TYPE="$AGENT_TYPE_RAW"
   STARTED_AT="$TS"
   if [ -f "$FILE" ]; then
-    [ -z "$AGENT_TYPE" ] && AGENT_TYPE=$(jq -r '.type // "unknown"' "$FILE")
-    STARTED_AT=$(jq -r '.startedAt // empty' "$FILE")
-    [ -z "$STARTED_AT" ] && STARTED_AT="$TS"
+    eval "$(jq -r '@sh "PREV_TYPE=\(.type // "unknown")", @sh "PREV_START=\(.startedAt // "")"' "$FILE")"
+    [ -z "$AGENT_TYPE" ] && AGENT_TYPE="$PREV_TYPE"
+    [ -n "$PREV_START" ] && STARTED_AT="$PREV_START"
   fi
   cat > "$FILE" <<EOF
 {"agentId":"$AGENT_ID","type":"$AGENT_TYPE","status":"idle","startedAt":"$STARTED_AT","updatedAt":"$TS"}

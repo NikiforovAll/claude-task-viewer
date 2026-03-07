@@ -1,0 +1,7 @@
+{
+  "status": "waiting",
+  "kind": "permission",
+  "toolName": "Bash",
+  "toolInput": "{\"command\":\"npm install express\"}\n",
+  "timestamp": "2026-03-05T10:00:00Z"
+}

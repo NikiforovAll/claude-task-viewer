@@ -14,7 +14,14 @@ const HOOK_SCRIPT_SRC = path.join(__dirname, 'hooks', 'agent-spy.sh');
 const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
 
 const HOOK_COMMAND = '~/.claude/hooks/agent-spy.sh';
-const HOOK_EVENTS = ['SubagentStart', 'SubagentStop', 'TeammateIdle'];
+const HOOK_EVENTS = [
+  { event: 'SubagentStart' },
+  { event: 'SubagentStop' },
+  { event: 'TeammateIdle' },
+  { event: 'PermissionRequest' },
+  { event: 'PreToolUse', matcher: 'AskUserQuestion' },
+  { event: 'PostToolUse' },
+];
 
 // ANSI helpers
 const green = s => `\x1b[32m${s}\x1b[0m`;
@@ -95,12 +102,13 @@ async function runInstall() {
   if (!settings.hooks) settings.hooks = {};
 
   const needed = [];
-  for (const event of HOOK_EVENTS) {
+  for (const { event, matcher } of HOOK_EVENTS) {
     if (!settings.hooks[event]) settings.hooks[event] = [];
+    const matcherStr = matcher || '';
     const exists = settings.hooks[event].some(g =>
-      g.hooks?.some(h => h.command === HOOK_COMMAND)
+      g.matcher === matcherStr && g.hooks?.some(h => h.command === HOOK_COMMAND)
     );
-    if (!exists) needed.push(event);
+    if (!exists) needed.push({ event, matcher: matcherStr });
   }
 
   let settingsUpdated = false;
@@ -108,11 +116,11 @@ async function runInstall() {
     console.log(`    ${green('✓')} Already configured`);
     settingsUpdated = true;
   } else {
-    console.log(`    Adding hooks for: ${needed.join(', ')}`);
+    console.log(`    Adding hooks for: ${needed.map(n => n.matcher ? `${n.event}:${n.matcher}` : n.event).join(', ')}`);
     if (await prompt(`    Update settings? [Y/n] `)) {
-      for (const event of needed) {
+      for (const { event, matcher } of needed) {
         settings.hooks[event].push({
-          matcher: '',
+          matcher,
           hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: 5 }]
         });
       }
@@ -147,7 +155,8 @@ async function runUninstall() {
       const settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
       if (settings.hooks) {
         let removed = 0;
-        for (const event of HOOK_EVENTS) {
+        const eventNames = [...new Set(HOOK_EVENTS.map(e => e.event))];
+        for (const event of eventNames) {
           if (!Array.isArray(settings.hooks[event])) continue;
           const before = settings.hooks[event].length;
           settings.hooks[event] = settings.hooks[event].filter(g =>

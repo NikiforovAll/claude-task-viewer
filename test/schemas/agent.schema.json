@@ -1,0 +1,19 @@
+{
+  "$id": "agent.schema.json",
+  "title": "Claude Code Agent Activity",
+  "type": "object",
+  "required": ["agentId", "status", "startedAt"],
+  "properties": {
+    "agentId": { "type": "string" },
+    "type": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["active", "idle", "stopped"]
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "stoppedAt": { "type": ["string", "null"], "format": "date-time" },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time" },
+    "lastMessage": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}
