@@ -83,38 +83,24 @@ function getSessionLogStat(meta) {
   } catch (e) { return { mtime: null, hasMessages: false }; }
 }
 
-function checkActiveAgents(sessionId, meta, stale, logMtime) {
-  const teamConfig = loadTeamConfig(sessionId);
-  const resolvedId = (teamConfig && teamConfig.leadSessionId) ? teamConfig.leadSessionId : sessionId;
-  const agentDir = path.join(AGENT_ACTIVITY_DIR, resolvedId);
-  if (!existsSync(agentDir)) return false;
+function checkAgentStatus(agentDir, stale, logMtime) {
+  const result = { hasActive: false, hasRunning: false, waitingForUser: null };
+  if (!existsSync(agentDir) || stale) return result;
   try {
-    if (stale) return false;
-    if (checkWaitingForUser(agentDir, logMtime)) return true;
+    result.waitingForUser = checkWaitingForUser(agentDir, logMtime);
+    if (result.waitingForUser) result.hasActive = true;
     for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
       try {
         const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
-        if ((agent.status === 'active' || agent.status === 'idle') && isAgentFresh(agent)) {
-          return true;
+        if (isAgentFresh(agent)) {
+          if (agent.status === 'active') { result.hasActive = true; result.hasRunning = true; }
+          else if (agent.status === 'idle') { result.hasActive = true; }
         }
+        if (result.hasRunning && result.hasActive) break;
       } catch (e) { /* skip invalid */ }
     }
   } catch (e) { /* ignore */ }
-  return false;
-}
-
-function checkRunningAgents(agentDir, meta, stale) {
-  if (!existsSync(agentDir)) return false;
-  if (stale) return false;
-  try {
-    for (const file of readdirSync(agentDir).filter(f => f.endsWith('.json') && !f.startsWith('_'))) {
-      try {
-        const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
-        if (agent.status === 'active' && isAgentFresh(agent)) return true;
-      } catch (e) { /* skip invalid */ }
-    }
-  } catch (e) { /* ignore */ }
-  return false;
+  return result;
 }
 
 function isTeamSession(sessionId) {
@@ -421,6 +407,7 @@ app.get('/api/sessions', async (req, res) => {
             const rid = (tc && tc.leadSessionId) ? tc.leadSessionId : entry.name;
             return path.join(AGENT_ACTIVITY_DIR, rid);
           })();
+          const agentStatus = checkAgentStatus(resolvedAgentDir, stale, logMtime);
 
           sessionsMap.set(entry.name, {
             id: entry.name,
@@ -439,9 +426,9 @@ app.get('/api/sessions', async (req, res) => {
             isTeam,
             memberCount,
             hasMessages: logStat.hasMessages,
-            hasActiveAgents: checkActiveAgents(entry.name, meta, stale, logMtime),
-            hasRunningAgents: checkRunningAgents(resolvedAgentDir, meta, stale),
-            hasWaitingForUser: !!checkWaitingForUser(resolvedAgentDir, logMtime),
+            hasActiveAgents: agentStatus.hasActive,
+            hasRunningAgents: agentStatus.hasRunning,
+            hasWaitingForUser: !!agentStatus.waitingForUser,
             hasRecentLog: logAge <= AGENT_STALE_MS,
             ...planInfo
           });
@@ -463,6 +450,7 @@ app.get('/api/sessions', async (req, res) => {
         }
         const planInfo = getPlanInfo(meta.slug);
         const metaAgentDir = path.join(AGENT_ACTIVITY_DIR, sessionId);
+        const metaAgentStatus = checkAgentStatus(metaAgentDir, stale, logMtime);
         sessionsMap.set(sessionId, {
           id: sessionId,
           name: getSessionDisplayName(sessionId, meta),
@@ -480,9 +468,9 @@ app.get('/api/sessions', async (req, res) => {
           isTeam: false,
           memberCount: 0,
           hasMessages: logStat.hasMessages,
-          hasActiveAgents: checkActiveAgents(sessionId, meta, stale, logMtime),
-          hasRunningAgents: checkRunningAgents(metaAgentDir, meta, stale),
-          hasWaitingForUser: !!checkWaitingForUser(metaAgentDir, logMtime),
+          hasActiveAgents: metaAgentStatus.hasActive,
+          hasRunningAgents: metaAgentStatus.hasRunning,
+          hasWaitingForUser: !!metaAgentStatus.waitingForUser,
           hasRecentLog: logAge <= AGENT_STALE_MS,
           ...planInfo
         });
