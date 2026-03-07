@@ -2133,6 +2133,9 @@
     .session-item.kb-selected::before {
       width: 0;
     }
+    .session-item.stale {
+      opacity: 0.6;
+    }
   </style>
 </head>
 <body>
@@ -2936,6 +2939,7 @@
       } else {
         const text = stripAnsi(m.fullText || m.text);
         document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : 'User';
+        document.getElementById('msg-detail-agent-btn').style.display = 'none';
         body.innerHTML = renderMarkdown(text);
       }
       const modal = document.getElementById('msg-detail-modal').querySelector('.modal');
@@ -3192,9 +3196,20 @@
         const ACTIVE_PLAN_MS = 15 * 60 * 1000;
         const RECENTLY_MODIFIED_MS = 5 * 60 * 1000;
         const now = Date.now();
-        filteredSessions = filteredSessions.filter(s => s.hasMessages && (s.pending > 0 || s.inProgress > 0 || s.hasActiveAgents || s.hasWaitingForUser || s.hasRecentLog ||
-          (s.hasPlan && !s.planImplementationSessionId && (now - new Date(s.modifiedAt).getTime()) <= ACTIVE_PLAN_MS) ||
-          (now - new Date(s.modifiedAt).getTime()) <= RECENTLY_MODIFIED_MS));
+        const activeSessionIds = new Set();
+        filteredSessions = filteredSessions.filter(s => {
+          const isActive = s.hasMessages && (s.pending > 0 || s.inProgress > 0 || s.hasActiveAgents || s.hasWaitingForUser || s.hasRecentLog ||
+            (s.hasPlan && !s.planImplementationSessionId && (now - new Date(s.modifiedAt).getTime()) <= ACTIVE_PLAN_MS) ||
+            (now - new Date(s.modifiedAt).getTime()) <= RECENTLY_MODIFIED_MS);
+          if (isActive) activeSessionIds.add(s.id);
+          return isActive;
+        });
+        // Include plan sessions whose implementation is active
+        const planSessions = sessions.filter(s => s.planImplementationSessionId && activeSessionIds.has(s.planImplementationSessionId) && !activeSessionIds.has(s.id));
+        if (planSessions.length) {
+          filteredSessions = filteredSessions.concat(planSessions);
+          filteredSessions.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+        }
       }
       if (filterProject) {
         filteredSessions = filteredSessions.filter(s => matchesProjectFilter(s.project));
@@ -3277,7 +3292,7 @@
         const memberCount = session.memberCount || 0;
 
         return `
-          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''}" title="${tooltip}">
+          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''} ${!session.hasRecentLog && !session.inProgress && !session.hasWaitingForUser ? 'stale' : ''}" title="${tooltip}">
             <div class="session-name">${escapeHtml(primaryName)}</div>
             ${isActive && lastInlineMessage ? `<div class="session-latest-msg">${lastInlineMessage}</div>` : secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
             ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
@@ -4813,7 +4828,7 @@
         <h3 class="modal-title" id="msg-detail-title">Message</h3>
         <div style="display:flex;gap:4px;align-items:center;">
           <button id="msg-detail-agent-btn" class="icon-btn" aria-label="View Agent" title="View Agent" style="display:none" onclick="closeMsgDetailModal();showAgentModal(this.dataset.agentId)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><rect x="4" y="10" width="16" height="10" rx="2"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/><path d="M12 2v4"/><path d="M2 14h2"/><path d="M20 14h2"/></svg>
           </button>
           <button class="icon-btn" aria-label="Copy to clipboard" title="Copy to clipboard" onclick="copyMsgToClipboard(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>

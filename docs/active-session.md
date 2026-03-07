@@ -25,6 +25,9 @@ The session was last modified within the last **5 minutes**, regardless of task/
 ### 7. Waiting for user input
 The session has a fresh `_waiting.json` marker (< 30 min old, `PERMISSION_TTL_MS`) in its agent-activity directory. This covers both permission prompts (`PermissionRequest`) and user questions (`AskUserQuestion`). These sessions need attention even if they have no tasks or agents. The marker is auto-resolved if the session's JSONL log was modified after the marker timestamp plus a grace period (`WAITING_RESOLVE_GRACE_MS`, 5s) — this handles cases where `PostToolUse` never fires (e.g. `ExitPlanMode`).
 
+### 8. Plan session with active implementation
+The session is a plan session with a `planImplementationSessionId` that points to another session which passes the active filter. This keeps correlated plan+implementation pairs visible together — if the implementation session is active, its parent plan session is included too.
+
 ## Design Principles
 
 - **Tasks are always-on signals** — if work is happening, the session is active regardless of age.

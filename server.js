@@ -702,10 +702,12 @@ app.get('/api/sessions/:sessionId/agents', (req, res) => {
     for (const file of files) {
       try {
         const agent = JSON.parse(readFileSync(path.join(agentDir, file), 'utf8'));
-        if (!isAgentFresh(agent)) continue;
-        if (sessionStale && (agent.status === 'active' || agent.status === 'idle')) {
-          agent.status = 'stopped';
-          if (!agent.stoppedAt) agent.stoppedAt = agent.updatedAt || agent.startedAt;
+        const agentStale = !sessionStale && agent.updatedAt && (Date.now() - new Date(agent.updatedAt).getTime()) > AGENT_STALE_MS;
+        if (!isAgentFresh(agent) || sessionStale || agentStale) {
+          if (agent.status === 'active' || agent.status === 'idle') {
+            agent.status = 'stopped';
+            if (!agent.stoppedAt) agent.stoppedAt = agent.updatedAt || agent.startedAt;
+          }
         }
         agents.push(agent);
       } catch (e) { /* skip invalid */ }

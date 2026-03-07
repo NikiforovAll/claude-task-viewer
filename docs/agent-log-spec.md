@@ -46,7 +46,7 @@ Configured in `~/.claude/settings.json` for three events: `SubagentStart`, `Suba
 
 ### REST endpoint
 
-`GET /api/sessions/:sessionId/agents` — returns array of agent objects. For team sessions, resolves `sessionId` to the leader's UUID via team config before reading files.
+`GET /api/sessions/:sessionId/agents` — returns array of agent objects. For team sessions, resolves `sessionId` to the leader's UUID via team config before reading files. All agents are returned regardless of age; agents whose `updatedAt` is older than `AGENT_STALE_MS` (5 min) are returned with their status set to `stopped` by the server.
 
 ### File watcher
 
@@ -88,7 +88,7 @@ Shutdown handshake creates duplicate agent instances per worker. Three rounds:
 
 ### Stale timeout
 
-`AGENT_STALE_MS = 300000` (5 min) — active agents whose `startedAt` exceeds this threshold are marked as stopped in the UI. This handles cases where `SubagentStop` never fires.
+`AGENT_STALE_MS = 300000` (5 min) — active agents whose `updatedAt` exceeds this threshold are marked as stopped. This is enforced on both the server side (agents returned with `stopped` status) and the frontend. Handles cases where `SubagentStop` never fires.
 
 ### SSE handler
 
@@ -100,7 +100,8 @@ Listens for `type: "agent-update"` events. If `sessionId` matches current sessio
 |----------|-------|----------|---------|
 | `AGENT_FILE_CAP` | 20 | server.js | Max agent files per session on disk |
 | `AGENT_LOG_MAX` | 8 | index.html | Max agents shown in footer |
-| `AGENT_STALE_MS` | 300000 | index.html | Stale timeout for active agents (5 min) |
+| `AGENT_STALE_MS` | 300000 | server.js, index.html | Stale timeout for active agents (5 min); server marks stale agents as stopped |
+| `AGENT_TTL_MS` | 3600000 | server.js | Agent freshness for session-level status checks (`checkActiveAgents`/`checkRunningAgents`); does NOT filter agents from detail endpoint |
 | `AGENT_COOLDOWN_MS` | 180000 | index.html | Cooldown period constant (3 min) |
 
 ## Known limitations
