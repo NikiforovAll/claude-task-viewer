@@ -249,6 +249,8 @@ function loadSessionMetadata() {
         metadata[sessionId] = {
           slug: sessionInfo.slug,
           project: sessionInfo.projectPath || null,
+          gitBranch: sessionInfo.gitBranch || null,
+          customTitle: sessionInfo.customTitle || null,
           jsonlPath: jsonlPath
         };
         sessionIds.push(sessionId);
@@ -280,7 +282,8 @@ function loadSessionMetadata() {
                 };
               }
               metadata[entry.sessionId].description = entry.description || null;
-              metadata[entry.sessionId].gitBranch = entry.gitBranch || null;
+              if (entry.gitBranch) metadata[entry.sessionId].gitBranch = entry.gitBranch;
+              if (entry.customTitle) metadata[entry.sessionId].customTitle = entry.customTitle;
               metadata[entry.sessionId].created = entry.created || null;
             }
           }
@@ -339,8 +342,9 @@ function getPlanInfo(slug) {
 }
 
 function getSessionDisplayName(sessionId, meta) {
+  if (meta?.customTitle) return meta.customTitle;
   if (meta?.slug) return meta.slug;
-  return null; // Frontend will show UUID as fallback
+  return null;
 }
 
 // API: List all sessions
@@ -425,6 +429,7 @@ app.get('/api/sessions', async (req, res) => {
             project: meta.project || null,
             description: meta.description || null,
             gitBranch: meta.gitBranch || null,
+            customTitle: meta.customTitle || null,
             taskCount: taskFiles.length,
             completed,
             inProgress,
@@ -465,6 +470,7 @@ app.get('/api/sessions', async (req, res) => {
           project: meta.project || null,
           description: meta.description || null,
           gitBranch: meta.gitBranch || null,
+          customTitle: meta.customTitle || null,
           taskCount: 0,
           completed: 0,
           inProgress: 0,
@@ -500,6 +506,7 @@ app.get('/api/sessions', async (req, res) => {
             project: meta.project || null,
             description: meta.description || null,
             gitBranch: meta.gitBranch || null,
+            customTitle: meta.customTitle || null,
             taskCount: 0,
             completed: 0,
             inProgress: 0,

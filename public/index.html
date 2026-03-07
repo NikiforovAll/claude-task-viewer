@@ -2091,6 +2091,103 @@
       animation: shimmer 2s linear infinite;
     }
 
+    /* Project group headers in session list */
+    .project-group-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px 4px;
+      margin-top: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .project-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .project-group-header:hover {
+      color: var(--text-primary);
+    }
+
+    .project-group-header .group-chevron {
+      transition: transform 0.15s ease;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .project-group-header.collapsed .group-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .project-group-header .group-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-group-header .group-count {
+      font-weight: 400;
+      color: var(--text-muted);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .project-group-header .group-path-toggle {
+      color: var(--text-muted);
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+
+    .project-group-header .group-path-toggle:hover {
+      color: var(--accent);
+    }
+
+    .project-group-breadcrumb {
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 0 10px 0 28px;
+      font-family: 'IBM Plex Mono', monospace;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease;
+      cursor: pointer;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .project-group-breadcrumb.expanded {
+      max-height: 24px;
+      opacity: 1;
+      padding: 2px 10px 4px 28px;
+    }
+
+    .project-group-breadcrumb:hover {
+      color: var(--accent);
+    }
+
+    .project-group-breadcrumb .sep {
+      opacity: 0.4;
+    }
+
+    .project-group-sessions {
+      display: block;
+    }
+
+    .project-group-sessions.collapsed {
+      display: none;
+    }
+
     /* Session list hover accent bar */
     .session-item {
       position: relative;
@@ -2368,6 +2465,8 @@
     let sessionLimit = '20';
     let filterProject = '__recent__'; // null = all, '__recent__' = last 24h, or project path
     let recentProjects = new Set();
+    const collapsedProjectGroups = new Set();
+    let stableGroupOrder = []; // cached project path order to prevent jumping
     let searchQuery = ''; // Search query for fuzzy search
     let allTasksCache = []; // Cache all tasks for search
     let bulkDeleteSessionId = null; // Track session for bulk delete
@@ -2384,6 +2483,7 @@
     let selectedSessionId = null;
     let focusZone = 'board'; // 'board' | 'sidebar'
     let selectedSessionIdx = -1;
+    let sessionJustSelected = false;
 
     function getUrlState() {
       const params = new URLSearchParams(window.location.search);
@@ -2395,6 +2495,7 @@
         project: params.get('project'),
         owner: params.get('owner'),
         search: params.get('search'),
+        messages: params.get('messages') === '1',
       };
     }
 
@@ -2407,6 +2508,7 @@
       if (filterProject && filterProject !== '__recent__') params.set('project', filterProject);
       if (ownerFilter) params.set('owner', ownerFilter);
       if (searchQuery) params.set('search', searchQuery);
+      if (messagePanelOpen) params.set('messages', '1');
       const qs = params.toString();
       const url = qs ? `?${qs}` : window.location.pathname;
       history.replaceState(null, '', url);
@@ -2762,6 +2864,7 @@
         lastMessagesHash = '';
         lastInlineMessage = '';
         document.getElementById('latest-message').classList.remove('visible');
+        sessionJustSelected = true;
         updateUrl();
         renderSession();
         fetchAgents(sessionId);
@@ -2807,6 +2910,7 @@
         if (currentMessages.length) renderMessages(currentMessages);
         fetchMessages(currentSessionId);
       }
+      updateUrl();
     }
 
     function openLiveLatestMessage() {
@@ -3264,37 +3368,32 @@
         return;
       }
 
-      sessionsList.innerHTML = filteredSessions.map(session => {
+      // Helper to render a single session card
+      const renderSessionCard = (session) => {
         const total = session.taskCount;
         const percent = total > 0 ? Math.round((session.completed / total) * 100) : 0;
         const isActive = session.id === currentSessionId && viewMode === 'session';
         const hasInProgress = session.inProgress > 0;
         const isLive = hasInProgress || (session.modifiedAt && (Date.now() - new Date(session.modifiedAt).getTime()) <= LIVE_INDICATOR_MS);
         const sessionName = session.name || session.id;
-        const projectName = session.project ? session.project.split('/').pop() : null;
-        const primaryName = projectName || sessionName;
-        const secondaryName = projectName ? sessionName : null;
+        const useGrouped = sessionFilter === 'active' && session.project;
+        const primaryName = useGrouped ? sessionName : (session.project ? session.project.split('/').pop() : sessionName);
+        const secondaryName = useGrouped ? null : (session.project ? sessionName : null);
 
-        // Format git branch for display
         const gitBranch = session.gitBranch ? escapeHtml(session.gitBranch) : null;
-
-        // Format timestamps for display
         const createdDisplay = session.createdAt ? formatDate(session.createdAt) : '';
         const modifiedDisplay = formatDate(session.modifiedAt);
         const timeDisplay = session.createdAt && createdDisplay !== modifiedDisplay
           ? `Created ${createdDisplay} · Modified ${modifiedDisplay}`
           : modifiedDisplay;
-
-        // Build tooltip
         const tooltip = [session.id, timeDisplay, gitBranch ? `Branch: ${gitBranch}` : ''].filter(Boolean).join(' | ');
-
         const isTeam = session.isTeam;
         const memberCount = session.memberCount || 0;
 
         return `
           <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''} ${!session.hasRecentLog && !session.inProgress && !session.hasWaitingForUser ? 'stale' : ''}" title="${tooltip}">
             <div class="session-name">${escapeHtml(primaryName)}</div>
-            ${isActive && lastInlineMessage ? `<div class="session-latest-msg">${lastInlineMessage}</div>` : secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
+            ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
             ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
             ${session.planTitle ? `<div class="session-plan">${escapeHtml(session.planTitle)}</div>` : ''}
             <div class="session-progress">
@@ -3303,8 +3402,8 @@
                 ${(isTeam || session.project) ? `<span class="team-info-btn" onclick="event.stopPropagation(); showSessionInfoModal('${session.id}')" title="View session info">ℹ</span>` : ''}
                 ${session.hasPlan ? `<span class="plan-indicator" onclick="event.stopPropagation(); openPlanForSession('${session.id}')" title="View plan"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>` : ''}
                 ${session.hasRunningAgents ? '<span class="agent-badge" title="Active agents">🤖</span>' : ''}
-                ${session.hasWaitingForUser ? '<span class="agent-badge" title="Waiting for user">❓</span>' : ''}
                 ${session.planSourceSessionId ? `<span class="plan-indicator" title="Implements plan — click to view plan session" onclick="event.stopPropagation(); fetchTasks('${escapeHtml(session.planSourceSessionId)}')">📋</span>` : ''}
+                ${session.hasWaitingForUser ? '<span class="agent-badge" title="Waiting for user">❓</span>' : ''}
                 ${isLive ? '<span class="pulse"></span>' : ''}
               </span>
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
@@ -3313,11 +3412,84 @@
             <div class="session-time">${formatDate(session.modifiedAt)}</div>
           </button>
         `;
-      }).join('');
+      };
+
+      // Group active sessions by project
+      if (sessionFilter === 'active') {
+        const groups = new Map();
+        const ungrouped = [];
+        for (const session of filteredSessions) {
+          if (session.project) {
+            if (!groups.has(session.project)) groups.set(session.project, []);
+            groups.get(session.project).push(session);
+          } else {
+            ungrouped.push(session);
+          }
+        }
+
+        // Stable group order: preserve existing order, append new groups sorted by recency
+        const currentPaths = new Set(groups.keys());
+        const knownPaths = new Set(stableGroupOrder);
+        const keptOrder = stableGroupOrder.filter(p => currentPaths.has(p));
+        const newPaths = [...currentPaths].filter(p => !knownPaths.has(p));
+        if (newPaths.length > 1) {
+          const maxTime = new Map(newPaths.map(p => [p, Math.max(...groups.get(p).map(s => new Date(s.modifiedAt).getTime()))]));
+          newPaths.sort((a, b) => maxTime.get(b) - maxTime.get(a));
+        }
+        stableGroupOrder = [...keptOrder, ...newPaths];
+        const sortedGroups = stableGroupOrder.map(p => [p, groups.get(p)]);
+
+        let html = '';
+        for (const [projectPath, projectSessions] of sortedGroups) {
+          const folderName = projectPath.split(/[/\\]/).pop();
+          const isCollapsed = collapsedProjectGroups.has(projectPath);
+          const escapedPath = escapeHtml(projectPath);
+          const breadcrumbParts = projectPath.replace(/^\/home\/[^/]+/, '~').split(/[/\\]/).filter(Boolean);
+          const breadcrumbHtml = breadcrumbParts.map((p, i) => i < breadcrumbParts.length - 1 ? `${escapeHtml(p)}<span class="sep">/</span>` : escapeHtml(p)).join('');
+
+          html += `
+            <div class="project-group-header${isCollapsed ? ' collapsed' : ''}" data-group-path="${escapedPath}">
+              <svg class="group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              <span class="group-name">${escapeHtml(folderName)}</span>
+              <span class="group-count">${projectSessions.length}</span>
+              <span class="group-path-toggle" data-group-action="toggle-path" title="Show full path">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </span>
+            </div>
+            <div class="project-group-breadcrumb" data-full-path="${escapedPath}" title="Click to copy path">${breadcrumbHtml}</div>
+            <div class="project-group-sessions${isCollapsed ? ' collapsed' : ''}">
+              ${projectSessions.map(renderSessionCard).join('')}
+            </div>
+          `;
+        }
+
+        if (ungrouped.length > 0 && sortedGroups.length > 0) {
+          const isCollapsed = collapsedProjectGroups.has('__ungrouped__');
+          html += `
+            <div class="project-group-header${isCollapsed ? ' collapsed' : ''}" data-group-path="__ungrouped__">
+              <svg class="group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              <span class="group-name">Ungrouped</span>
+              <span class="group-count">${ungrouped.length}</span>
+            </div>
+            <div class="project-group-sessions${isCollapsed ? ' collapsed' : ''}">
+              ${ungrouped.map(renderSessionCard).join('')}
+            </div>
+          `;
+        } else {
+          html += ungrouped.map(renderSessionCard).join('');
+        }
+
+        sessionsList.innerHTML = html;
+      } else {
+        sessionsList.innerHTML = filteredSessions.map(renderSessionCard).join('');
+      }
 
       const items = getSessionItems();
       const activeIdx = items.findIndex(el => el.classList.contains('active'));
-      if (activeIdx >= 0) selectedSessionIdx = activeIdx;
+      if (activeIdx >= 0 && (selectedSessionIdx < 0 || sessionJustSelected)) {
+        selectedSessionIdx = activeIdx;
+        sessionJustSelected = false;
+      }
 
       if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
         if (items.length > 0) {
@@ -3337,28 +3509,17 @@
       const session = sessions.find(s => s.id === currentSessionId);
       if (!session) return;
 
-      const displayName = session.name || currentSessionId;
+      const displayName = session.customTitle || session.gitBranch || session.description || session.name || currentSessionId;
 
-      // Create header with delete button
-      sessionTitle.innerHTML = `
-        <span style="flex: 1;">${escapeHtml(displayName)}</span>
-        <button class="icon-btn icon-btn-danger" onclick="deleteAllSessionTasks('${session.id}')" title="Delete all tasks in this session">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-        </button>
-      `;
+      sessionTitle.textContent = displayName;
 
-      // Build meta text with project path, branch, and description
+      // Build meta text with project path and description
       const projectName = session.project ? session.project.split('/').pop() : null;
       const metaParts = [`${currentTasks.length} tasks`];
       if (projectName) {
         metaParts.push(projectName);
       }
-      if (session.gitBranch) {
-        metaParts.push(session.gitBranch);
-      }
-      if (session.description) {
+      if (session.description && session.gitBranch) {
         metaParts.push(session.description);
       }
       metaParts.push(formatDate(session.modifiedAt));
@@ -3535,6 +3696,28 @@
       if (newIdx >= 0 && newIdx < items.length) {
         selectSessionByIndex(newIdx);
       }
+    }
+
+    function setGroupCollapsed(header, collapsed) {
+      if (!header) return;
+      const projectPath = header.dataset.groupPath;
+      if (collapsed === collapsedProjectGroups.has(projectPath)) return;
+      if (collapsed) collapsedProjectGroups.add(projectPath);
+      else collapsedProjectGroups.delete(projectPath);
+      header.classList.toggle('collapsed', collapsed);
+      let el = header.nextElementSibling;
+      while (el && !el.classList.contains('project-group-sessions')) el = el.nextElementSibling;
+      if (el) el.classList.toggle('collapsed', collapsed);
+    }
+
+    function toggleSelectedSessionGroup(collapse) {
+      const items = getSessionItems();
+      if (selectedSessionIdx < 0 || selectedSessionIdx >= items.length) return;
+      const container = items[selectedSessionIdx].closest('.project-group-sessions');
+      if (!container) return;
+      let header = container.previousElementSibling;
+      while (header && !header.classList.contains('project-group-header')) header = header.previousElementSibling;
+      setGroupCollapsed(header, collapse);
     }
 
     function activateSelectedSession() {
@@ -4056,6 +4239,16 @@
           navigateSession(-1);
           return;
         }
+        if (e.key === 'h' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          toggleSelectedSessionGroup(true);
+          return;
+        }
+        if (e.key === 'l' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          toggleSelectedSessionGroup(false);
+          return;
+        }
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           activateSelectedSession();
@@ -4331,6 +4524,32 @@
       if (filterProject === '__recent__') return recentProjects.has(project);
       return project === filterProject;
     }
+
+    // Event delegation for project group interactions
+    document.addEventListener('click', (e) => {
+      const pathToggle = e.target.closest('[data-group-action="toggle-path"]');
+      if (pathToggle) {
+        e.stopPropagation();
+        const header = pathToggle.closest('.project-group-header');
+        let el = header?.nextElementSibling;
+        while (el && !el.classList.contains('project-group-breadcrumb')) el = el.nextElementSibling;
+        if (el) el.classList.toggle('expanded');
+        return;
+      }
+
+      const breadcrumb = e.target.closest('.project-group-breadcrumb');
+      if (breadcrumb) {
+        e.stopPropagation();
+        const path = breadcrumb.dataset.fullPath;
+        if (path) navigator.clipboard.writeText(path).catch(() => {});
+        return;
+      }
+
+      const header = e.target.closest('.project-group-header');
+      if (header) {
+        setGroupCollapsed(header, !collapsedProjectGroups.has(header.dataset.groupPath));
+      }
+    });
 
     function filterByProject(project) {
       filterProject = project || null;
@@ -4800,11 +5019,14 @@
       document.getElementById('search-clear-btn').classList.add('visible');
     }
 
-    fetchSessions().then(() => {
+    fetchSessions().then(async () => {
       if (urlState.session) {
-        fetchTasks(urlState.session);
+        await fetchTasks(urlState.session);
       } else {
         showAllTasks();
+      }
+      if (urlState.messages && currentSessionId) {
+        toggleMessagePanel();
       }
     });
 
@@ -4818,6 +5040,7 @@
       loadPreferences();
       if (s.session) fetchTasks(s.session);
       else showAllTasks();
+      if (s.messages !== messagePanelOpen) toggleMessagePanel();
     });
   </script>
 
