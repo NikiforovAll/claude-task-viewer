@@ -2483,6 +2483,7 @@
     let selectedSessionId = null;
     let focusZone = 'board'; // 'board' | 'sidebar'
     let selectedSessionIdx = -1;
+    let selectedSessionKbId = null;
     let sessionJustSelected = false;
 
     function getUrlState() {
@@ -3488,16 +3489,28 @@
       const activeIdx = items.findIndex(el => el.classList.contains('active'));
       if (activeIdx >= 0 && (selectedSessionIdx < 0 || sessionJustSelected)) {
         selectedSessionIdx = activeIdx;
+        selectedSessionKbId = items[activeIdx].dataset.sessionId || null;
         sessionJustSelected = false;
       }
 
-      if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
+      if (selectedSessionKbId && focusZone === 'sidebar') {
+        const restoredIdx = items.findIndex(el => el.dataset.sessionId === selectedSessionKbId);
+        if (restoredIdx >= 0) {
+          selectedSessionIdx = restoredIdx;
+          items[restoredIdx].classList.add('kb-selected');
+        } else {
+          selectedSessionIdx = -1;
+          selectedSessionKbId = null;
+        }
+      } else if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
         if (items.length > 0) {
           const clamped = Math.min(selectedSessionIdx, items.length - 1);
           selectedSessionIdx = clamped;
+          selectedSessionKbId = items[clamped].dataset.sessionId || null;
           items[clamped].classList.add('kb-selected');
         } else {
           selectedSessionIdx = -1;
+          selectedSessionKbId = null;
         }
       }
     }
@@ -3681,6 +3694,7 @@
       const prev = sessionsList.querySelector('.session-item.kb-selected');
       if (prev) prev.classList.remove('kb-selected');
       selectedSessionIdx = Math.max(0, Math.min(idx, items.length - 1));
+      selectedSessionKbId = items[selectedSessionIdx].dataset.sessionId || null;
       items[selectedSessionIdx].classList.add('kb-selected');
       items[selectedSessionIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
