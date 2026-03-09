@@ -1,6 +1,6 @@
 {
   "name": "claude-code-kanban",
-  "version": "1.19.0-rc.10",
+  "version": "1.19.0-rc.11",
   "description": "A web-based Kanban board for viewing Claude Code tasks with agent teams support",
   "main": "server.js",
   "bin": {
