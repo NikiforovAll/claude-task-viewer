@@ -150,6 +150,10 @@ app.param('taskId', (req, res, next, val) => {
 app.use(express.json());
 
 // Serve static files
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 const messageCache = new Map();
