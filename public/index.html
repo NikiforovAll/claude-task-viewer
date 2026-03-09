@@ -239,6 +239,57 @@
       background: #ef4444;
     }
 
+    .offline-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg-deep);
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+    .offline-overlay.visible { display: flex; }
+    .offline-card {
+      max-width: 460px;
+      padding: 3rem 2.5rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .offline-card svg { width: 56px; height: 56px; opacity: 0.4; margin-bottom: 1.5rem; }
+    .offline-card h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+    .offline-card p {
+      font-size: 0.82rem;
+      color: var(--text-tertiary);
+      line-height: 1.7;
+      margin-bottom: 1.25rem;
+    }
+    .offline-card code {
+      display: inline-block;
+      padding: 0.5rem 1.2rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent-text);
+      margin-bottom: 1.25rem;
+      user-select: all;
+    }
+    .offline-card .btn { font-size: 0.8rem; }
+    .offline-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 1rem;
+    }
+
     /* Sidebar sections */
     .sidebar-section {
       display: flex;
@@ -2242,6 +2293,21 @@
   </style>
 </head>
 <body>
+  <div id="offline-overlay" class="offline-overlay">
+    <div class="offline-card">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+        <rect width="512" height="512" rx="96" fill="#1a1a1a"/>
+        <rect x="64" y="96" width="112" height="320" rx="32" fill="#e8927c"/>
+        <rect x="208" y="96" width="112" height="224" rx="32" fill="#e8927c"/>
+        <rect x="352" y="96" width="112" height="128" rx="32" fill="#e8927c"/>
+      </svg>
+      <h2>Server Not Running</h2>
+      <p>The dashboard needs the Claude Code Kanban server to stream live task data. Start it with:</p>
+      <code>npx claude-code-kanban</code>
+      <button class="btn btn-primary" onclick="location.reload()">Retry Connection</button>
+      <div class="offline-status" id="offline-status" aria-live="polite"></div>
+    </div>
+  </div>
   <a href="#main-content" class="skip-link">Skip to main content</a>
   <div class="app">
     <!-- Sidebar -->
@@ -4369,6 +4435,19 @@
       let retryDelay = 1000;
       let eventSource;
       let wasConnected = false;
+      let failCount = 0;
+      const offlineOverlay = document.getElementById('offline-overlay');
+      const offlineStatus = document.getElementById('offline-status');
+
+      function showOffline() {
+        offlineOverlay.classList.add('visible');
+        offlineStatus.textContent = 'Attempting to reconnect...';
+      }
+
+      function hideOffline() {
+        offlineOverlay.classList.remove('visible');
+        failCount = 0;
+      }
 
       function connect() {
         eventSource = new EventSource('/api/events');
@@ -4381,6 +4460,7 @@
           }
           wasConnected = true;
           retryDelay = 1000;
+          hideOffline();
           connectionStatus.innerHTML = `
             <span class="connection-dot live"></span>
             <span>Connected</span>
@@ -4389,11 +4469,13 @@
 
         eventSource.onerror = () => {
           eventSource.close();
+          failCount++;
           console.warn('[SSE] Connection lost, retrying in', retryDelay, 'ms');
           connectionStatus.innerHTML = `
             <span class="connection-dot error"></span>
             <span>Reconnecting...</span>
           `;
+          if (failCount >= 2) showOffline();
           setTimeout(connect, retryDelay);
           retryDelay = Math.min(retryDelay * 2, 30000);
         };
