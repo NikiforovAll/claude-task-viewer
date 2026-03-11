@@ -1585,8 +1585,10 @@
     .agent-tab { padding: 8px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; user-select: none; }
     .agent-tab:hover { color: var(--text-secondary); border-bottom-color: var(--text-muted); }
     .agent-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .agent-tab-panel { display: none; padding-top: 12px; overflow: hidden; }
+    .agent-tab-panel { display: none; padding-top: 12px; overflow: hidden; position: relative; }
     .agent-tab-panel.active { display: block; }
+    .agent-tab-copy { position: absolute; top: 14px; right: 8px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; cursor: pointer; color: var(--text-tertiary); opacity: 0.7; transition: opacity 0.15s, color 0.15s; z-index: 2; }
+    .agent-tab-copy:hover { opacity: 1; color: var(--text-primary); }
     .rendered-md h1, .rendered-md h2, .rendered-md h3,
     .rendered-md h4, .rendered-md h5, .rendered-md h6 {
       margin-top: 1em;
@@ -3099,9 +3101,11 @@
         let agentExtraHtml = '';
         const agentBtn = document.getElementById('msg-detail-agent-btn');
         if (m.tool === 'Agent' && m.agentId) {
-          const respHtml = m.agentLastMessage ? renderMarkdown(stripAnsi(m.agentLastMessage.trim())) : null;
-          const promptHtml = m.agentPrompt ? renderMarkdown(m.agentPrompt) : null;
-          agentExtraHtml += renderAgentTabs(promptHtml, respHtml);
+          const agentRespText = m.agentLastMessage ? stripAnsi(m.agentLastMessage.trim()) : null;
+          const agentPromptText = m.agentPrompt || null;
+          const respHtml = agentRespText ? renderMarkdown(agentRespText) : null;
+          const promptHtml = agentPromptText ? renderMarkdown(agentPromptText) : null;
+          agentExtraHtml += renderAgentTabs(promptHtml, respHtml, agentPromptText, agentRespText);
           agentBtn.style.display = '';
           agentBtn.dataset.agentId = m.agentId;
         } else {
@@ -3132,20 +3136,26 @@
       msgDetailFollowLatest = false;
     }
 
+    async function copyWithFeedback(text, btn) {
+      if (btn.dataset.copying) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.dataset.copying = '1';
+        const svg = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>';
+        setTimeout(() => { btn.innerHTML = svg; delete btn.dataset.copying; }, 1500);
+      } catch (e) {
+        console.error('Failed to copy:', e);
+      }
+    }
+
     async function copyMsgToClipboard(btn) {
       const m = currentMessages[currentMsgDetailIdx];
       if (!m) return;
       const content = m.type === 'tool_use'
         ? (m.fullDetail || m.detail || '')
         : stripAnsi(m.fullText || m.text);
-      try {
-        await navigator.clipboard.writeText(content);
-        const svg = btn.innerHTML;
-        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>';
-        setTimeout(() => btn.innerHTML = svg, 1500);
-      } catch (e) {
-        console.error('Failed to copy:', e);
-      }
+      copyWithFeedback(content, btn);
     }
 
     async function openMsgInEditor() {
@@ -3264,6 +3274,17 @@
       document.getElementById('agent-footer-toggle').innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;';
     }
 
+    let _agentModalPromptText = null;
+    let _agentModalResponseText = null;
+
+    async function copyAgentModalAll(btn) {
+      const parts = [];
+      if (_agentModalPromptText) parts.push('## Prompt\n' + _agentModalPromptText);
+      if (_agentModalResponseText) parts.push('## Response\n' + _agentModalResponseText);
+      if (!parts.length) return;
+      copyWithFeedback(parts.join('\n\n'), btn);
+    }
+
     function showAgentModal(agentId) {
       const agent = currentAgents.find(a => a.agentId === agentId);
       if (!agent) return;
@@ -3295,10 +3316,13 @@
           `<tr><td style="padding:6px 12px 6px 0;color:var(--text-tertiary);white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:6px 0;color:var(--text-primary);">${v}</td></tr>`
         ).join('') + `</table>`;
 
-      const prompt = agentMsg?.agentPrompt || agent.prompt;
-      const promptHtml = prompt ? renderMarkdown(prompt) : null;
-      const responseHtml = agent.lastMessage ? renderMarkdown(stripAnsi(agent.lastMessage.trim())) : null;
-      html += renderAgentTabs(promptHtml, responseHtml);
+      const promptText = agentMsg?.agentPrompt || agent.prompt || null;
+      const responseText = agent.lastMessage ? stripAnsi(agent.lastMessage.trim()) : null;
+      _agentModalPromptText = promptText;
+      _agentModalResponseText = responseText;
+      const promptHtml = promptText ? renderMarkdown(promptText) : null;
+      const responseHtml = responseText ? renderMarkdown(responseText) : null;
+      html += renderAgentTabs(promptHtml, responseHtml, promptText, responseText);
 
       body.innerHTML = html;
       modal.classList.add('visible');
@@ -4572,27 +4596,39 @@
       return `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(text)}</pre>`;
     }
 
-    function renderAgentTabs(promptHtml, responseHtml) {
+    const _agentTabTexts = {};
+
+    function renderAgentTabs(promptHtml, responseHtml, promptText, responseText) {
+      for (const k in _agentTabTexts) delete _agentTabTexts[k];
       const tabs = [];
       const panels = [];
       const id = 'at-' + Math.random().toString(36).slice(2, 8);
       if (promptHtml) {
         tabs.push({ key: 'prompt', label: 'Prompt' });
         panels.push({ key: 'prompt', html: promptHtml });
+        if (promptText) _agentTabTexts[id + '-prompt'] = promptText;
       }
       if (responseHtml) {
         tabs.push({ key: 'response', label: 'Response' });
         panels.push({ key: 'response', html: responseHtml });
+        if (responseText) _agentTabTexts[id + '-response'] = responseText;
       }
       if (!tabs.length) return '';
       const defaultTab = responseHtml ? 'response' : tabs[0].key;
+      const copyBtn = (key) => `<button class="agent-tab-copy" title="Copy" onclick="copyAgentTab('${id}-${key}',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>`;
       const tabsHtml = tabs.map(t =>
         `<div class="agent-tab${t.key === defaultTab ? ' active' : ''}" data-tab-group="${id}" data-tab-key="${t.key}" onclick="document.querySelectorAll('[data-tab-group=\\'${id}\\']').forEach(el=>{el.classList.toggle('active',el.dataset.tabKey==='${t.key}')})">${t.label}</div>`
       ).join('');
       const panelsHtml = panels.map(p =>
-        `<div class="agent-tab-panel${p.key === defaultTab ? ' active' : ''}" data-tab-group="${id}" data-tab-key="${p.key}"><div class="detail-desc rendered-md" style="font-size:13px;">${p.html}</div></div>`
+        `<div class="agent-tab-panel${p.key === defaultTab ? ' active' : ''}" data-tab-group="${id}" data-tab-key="${p.key}">${copyBtn(p.key)}<div class="detail-desc rendered-md" style="font-size:13px;">${p.html}</div></div>`
       ).join('');
       return `<div class="agent-tabs">${tabsHtml}</div>${panelsHtml}`;
+    }
+
+    async function copyAgentTab(key, btn) {
+      const text = _agentTabTexts[key];
+      if (!text) return;
+      copyWithFeedback(text, btn);
     }
 
     const ownerColors = [
@@ -5439,11 +5475,16 @@
     <div class="modal plan-modal" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 id="agent-modal-title" class="modal-title">Agent</h3>
-        <button class="modal-close" aria-label="Close dialog" onclick="closeAgentModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button class="icon-btn" id="agent-modal-copy-all" aria-label="Copy all" title="Copy prompt + response" onclick="copyAgentModalAll(this)" style="margin-right:4px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+          <button class="modal-close" aria-label="Close dialog" onclick="closeAgentModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div id="agent-modal-body" class="modal-body" style="overflow-y: auto; overflow-x: hidden; flex: 0 1 auto; min-height: 0;"></div>
       <div class="modal-footer">
