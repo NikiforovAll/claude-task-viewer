@@ -1581,6 +1581,37 @@
     .msg-tool .msg-text { color: var(--text-secondary); }
     .msg-agent-link { color: var(--accent); font-size: 0.85rem; margin-left: 4px; opacity: 0.7; }
     .msg-agent-link:hover { opacity: 1; }
+    .msg-pin-btn {
+      flex-shrink: 0; background: none; border: none; color: var(--text-muted);
+      cursor: pointer; padding: 2px; opacity: 0; transition: opacity 0.15s;
+      margin-left: auto; align-self: flex-start;
+    }
+    .msg-item:hover .msg-pin-btn { opacity: 0.6; }
+    .msg-pin-btn:hover { opacity: 1 !important; color: var(--accent); }
+    .msg-pin-btn.pinned { opacity: 1; color: var(--accent); }
+    #message-panel-pinned:empty { display: none; }
+    #message-panel-pinned { flex-shrink: 0; padding: 8px 16px; }
+    .pinned-section {
+      border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--accent) 5%, var(--bg-surface));
+    }
+    .pinned-header {
+      padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--accent);
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;
+    }
+    .pinned-header svg { transition: transform 0.15s; }
+    .pinned-header.collapsed svg { transform: rotate(-90deg); }
+    .pinned-header.empty { cursor: default; color: var(--text-muted); }
+    .pinned-items { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 4px; }
+    .pinned-items.collapsed { display: none; }
+    .pinned-items .msg-item { margin: 0; }
+    .pinned-item-unpin {
+      flex-shrink: 0; background: none; border: none; color: var(--accent);
+      cursor: pointer; padding: 2px; opacity: 0.6; margin-left: auto; align-self: flex-start;
+    }
+    .pinned-item-unpin:hover { opacity: 1; color: var(--danger, #e55); }
+    .msg-pin-btn.pinned svg, #msg-detail-pin-btn.active svg { fill: var(--accent); stroke: var(--accent); }
     .agent-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-top: 16px; }
     .agent-tab { padding: 8px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; user-select: none; }
     .agent-tab:hover { color: var(--text-secondary); border-bottom-color: var(--text-muted); }
@@ -1623,6 +1654,14 @@
       background: var(--bg-hover);
       padding: 2px 6px;
       border-radius: 3px;
+      font-size: 11px;
+    }
+    .msg-item.msg-system {
+      border-left: 3px solid var(--border);
+    }
+    .msg-system .msg-text code {
+      background: none;
+      padding: 0;
       font-size: 11px;
     }
     .msg-time {
@@ -2527,6 +2566,7 @@
         </button>
         </div>
       </header>
+      <div id="message-panel-pinned"></div>
       <div id="message-panel-content" class="message-panel-content"></div>
     </aside>
   </div>
@@ -2932,6 +2972,7 @@
 
         currentTasks = newTasks;
         currentSessionId = sessionId;
+        currentPins = loadPins(sessionId);
         ownerFilter = '';
         lastMessagesHash = '';
         lastInlineMessage = '';
@@ -3035,7 +3076,7 @@
       const el = document.getElementById('latest-message');
       let last = null;
       for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].type === 'assistant' || messages[i].type === 'user') { last = messages[i]; break; }
+        if (messages[i].type === 'assistant' || (messages[i].type === 'user' && !messages[i].systemLabel)) { last = messages[i]; break; }
       }
       if (!last) { el.classList.remove('visible'); lastInlineMessage = ''; return; }
       const label = last.type === 'assistant' ? 'Claude' : 'User';
@@ -3051,26 +3092,76 @@
       }
     }
 
+    function renderMsgPinBtn(m, i) {
+      const pinned = isPinned(m);
+      return `<button class="msg-pin-btn${pinned ? ' pinned' : ''}" onclick="event.stopPropagation();togglePin(${i})" title="${pinned ? 'Unpin' : 'Pin'} message">${PIN_SVG}</button>`;
+    }
+
+    function renderPinnedSection() {
+      if (!currentPins.length) return '';
+      const chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M6 9l6 6 6-6"/></svg>';
+      const items = currentPins.map((p, pi) => {
+        const click = `onclick="showPinnedMsgDetail(${pi})" style="cursor:pointer"`;
+        const unpin = `<button class="pinned-item-unpin" onclick="event.stopPropagation();unpinById(${pi})" title="Unpin">${PIN_SVG}</button>`;
+        if (p.type === 'user') {
+          const text = escapeHtml(cleanMessageText(p.text || ''));
+          return `<div class="msg-item msg-user" ${click}>
+            ${MSG_ICON_USER}
+            <div class="msg-body"><div class="msg-text">${text}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
+          </div>`;
+        } else if (p.type === 'assistant') {
+          return `<div class="msg-item msg-assistant" ${click}>
+            ${MSG_ICON_ASSISTANT}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(cleanMessageText(p.text || ''))}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
+          </div>`;
+        } else if (p.type === 'tool_use') {
+          const toolDetail = p.detail ? ` <span style="color:var(--text-muted)">${escapeHtml(p.detail)}</span>` : '';
+          return `<div class="msg-item msg-tool" ${click}>
+            ${MSG_ICON_TOOL}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(p.tool || '')}${toolDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
+          </div>`;
+        }
+        return '';
+      }).join('');
+      const label = `Pinned (${currentPins.length})`;
+      const hasItems = currentPins.length > 0;
+      return `<div class="pinned-section">
+        <div class="pinned-header${pinnedCollapsed ? ' collapsed' : ''}${hasItems ? '' : ' empty'}" ${hasItems ? 'onclick="togglePinnedCollapse()"' : ''}>
+          <span>${label}</span>${hasItems ? chevron : ''}
+        </div>
+        ${hasItems ? `<div class="pinned-items${pinnedCollapsed ? ' collapsed' : ''}">${items}</div>` : ''}
+      </div>`;
+    }
+
     function renderMessages(messages) {
       const container = document.getElementById('message-panel-content');
+      const pinnedContainer = document.getElementById('message-panel-pinned');
+      pinnedContainer.innerHTML = renderPinnedSection();
       if (!messages.length) {
         container.innerHTML = '<div class="msg-empty">No messages found for this session</div>';
         return;
       }
-      container.innerHTML = messages.map((m, i) => {
+      const msgsHtml = messages.map((m, i) => {
+        const pinBtn = renderMsgPinBtn(m, i);
         const clickable = `onclick="msgDetailFollowLatest=false;showMsgDetail(${i})" style="cursor:pointer"`;
         if (m.type === 'user') {
+          if (m.systemLabel) {
+            return `<div class="msg-item msg-system" ${clickable}>
+              ${MSG_ICON_SYSTEM}
+              <div class="msg-body"><div class="msg-text"><code>${escapeHtml(m.systemLabel)}</code></div><div class="msg-time">${formatDate(m.timestamp)}</div></div>${pinBtn}
+            </div>`;
+          }
           const cmd = parseCommandMessage(m.text);
           const displayText = cmd ? cmd : escapeHtml(cleanMessageText(m.text));
           const isCmd = !!cmd;
           return `<div class="msg-item msg-user${isCmd ? ' msg-cmd' : ''}" ${clickable}>
-            <svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <div class="msg-body"><div class="msg-text">${isCmd ? '<code>' + escapeHtml(displayText) + '</code>' : displayText}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>
+            ${MSG_ICON_USER}
+            <div class="msg-body"><div class="msg-text">${isCmd ? '<code>' + escapeHtml(displayText) + '</code>' : displayText}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>${pinBtn}
           </div>`;
         } else if (m.type === 'assistant') {
           return `<div class="msg-item msg-assistant" ${clickable}>
-            <svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><path d="M12 2v4M8 7h8"/></svg>
-            <div class="msg-body"><div class="msg-text">${escapeHtml(cleanMessageText(m.text))}</div><div class="msg-time">${m.model ? escapeHtml(m.model) + ' · ' : ''}${formatDate(m.timestamp)}</div></div>
+            ${MSG_ICON_ASSISTANT}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(cleanMessageText(m.text))}</div><div class="msg-time">${m.model ? escapeHtml(m.model) + ' · ' : ''}${formatDate(m.timestamp)}</div></div>${pinBtn}
           </div>`;
         } else if (m.type === 'tool_use') {
           const toolDetail = m.detail ? ` <span style="color:var(--text-muted)">${escapeHtml(m.detail)}</span>` : '';
@@ -3079,17 +3170,132 @@
             ? `onclick="showAgentModal('${escapeHtml(m.agentId)}')" style="cursor:pointer"`
             : clickable;
           return `<div class="msg-item msg-tool" ${itemClick}>
-            <svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            <div class="msg-body"><div class="msg-text">${escapeHtml(m.tool)}${toolDetail}${agentLink}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>
+            ${MSG_ICON_TOOL}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(m.tool)}${toolDetail}${agentLink}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>${pinBtn}
           </div>`;
         }
         return '';
       }).join('');
+      container.innerHTML = msgsHtml;
       container.scrollTop = container.scrollHeight;
     }
 
     let currentMsgDetailIdx = null;
     let msgDetailFollowLatest = false;
+    let currentPins = [];
+    let pinnedCollapsed = false;
+
+    const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+    const MSG_ICON_USER = '<svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const MSG_ICON_ASSISTANT = '<svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><path d="M12 2v4M8 7h8"/></svg>';
+    const MSG_ICON_TOOL = '<svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+    const MSG_ICON_SYSTEM = '<svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+
+    function getPinId(m) {
+      const content = m.type === 'tool_use'
+        ? `${m.tool}:${(m.detail || '').slice(0, 100)}`
+        : (m.text || '').slice(0, 100);
+      return `${m.type}|${m.timestamp}|${content}`;
+    }
+
+    function loadPins(sessionId) {
+      try { return JSON.parse(localStorage.getItem(`pinned-messages-${sessionId}`)) || []; }
+      catch { return []; }
+    }
+
+    function savePins(sessionId, pins) {
+      localStorage.setItem(`pinned-messages-${sessionId}`, JSON.stringify(pins));
+    }
+
+    function isPinned(m) { return currentPins.some(p => p.id === getPinId(m)); }
+
+    function togglePin(msgIndex) {
+      const m = currentMessages[msgIndex];
+      if (!m || !currentSessionId) return;
+      const id = getPinId(m);
+      const idx = currentPins.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        currentPins.splice(idx, 1);
+      } else {
+        pinnedCollapsed = false;
+        currentPins.push({
+          id, type: m.type, text: m.text || null, fullText: m.fullText || null,
+          tool: m.tool || null, detail: m.detail || null, fullDetail: m.fullDetail || null,
+          description: m.description || null, timestamp: m.timestamp, model: m.model || null,
+          agentId: m.agentId || null, agentPrompt: m.agentPrompt || null,
+          agentLastMessage: m.agentLastMessage || null,
+          pinnedAt: new Date().toISOString()
+        });
+      }
+      savePins(currentSessionId, currentPins);
+      renderMessages(currentMessages);
+      updateMsgDetailPinState();
+    }
+
+    function unpinById(pinIdx) {
+      if (!currentSessionId || pinIdx < 0 || pinIdx >= currentPins.length) return;
+      currentPins.splice(pinIdx, 1);
+      savePins(currentSessionId, currentPins);
+      renderMessages(currentMessages);
+      updateMsgDetailPinState();
+    }
+
+    function togglePinFromModal() {
+      if (currentMsgDetailIdx != null && currentMessages[currentMsgDetailIdx]) {
+        togglePin(currentMsgDetailIdx);
+      } else if (currentPinDetailId != null) {
+        const pinIdx = currentPins.findIndex(p => p.id === currentPinDetailId);
+        if (pinIdx >= 0) unpinById(pinIdx);
+        currentPinDetailId = null;
+        closeMsgDetailModal();
+      }
+    }
+
+    let currentPinDetailId = null;
+
+    function showPinnedMsgDetail(pinIdx) {
+      const pin = currentPins[pinIdx];
+      if (!pin) return;
+      const idx = currentMessages.findIndex(m => getPinId(m) === pin.id);
+      if (idx >= 0) { currentPinDetailId = null; showMsgDetail(idx); return; }
+      currentMsgDetailIdx = null;
+      currentPinDetailId = pin.id;
+      const body = document.getElementById('msg-detail-body');
+      const agentBtn = document.getElementById('msg-detail-agent-btn');
+      if (pin.type === 'tool_use') {
+        document.getElementById('msg-detail-title').textContent = pin.tool || 'Tool';
+        const fullText = pin.fullDetail || pin.detail || '';
+        body.innerHTML = fullText ? `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>';
+        agentBtn.style.display = 'none';
+      } else {
+        const text = stripAnsi(pin.fullText || pin.text || '');
+        document.getElementById('msg-detail-title').textContent = pin.type === 'assistant' ? 'Claude' : 'User';
+        agentBtn.style.display = 'none';
+        body.innerHTML = renderMarkdown(text);
+      }
+      document.getElementById('msg-detail-meta').textContent = formatDate(pin.timestamp);
+      const pinBtn = document.getElementById('msg-detail-pin-btn');
+      if (pinBtn) pinBtn.classList.add('active');
+      document.getElementById('msg-detail-modal').classList.add('visible');
+    }
+
+    function updateMsgDetailPinState() {
+      const pinBtn = document.getElementById('msg-detail-pin-btn');
+      if (!pinBtn) return;
+      if (currentMsgDetailIdx != null && currentMessages[currentMsgDetailIdx]) {
+        pinBtn.classList.toggle('active', isPinned(currentMessages[currentMsgDetailIdx]));
+      } else if (currentPinDetailId) {
+        pinBtn.classList.toggle('active', currentPins.some(p => p.id === currentPinDetailId));
+      }
+    }
+
+    function togglePinnedCollapse() {
+      pinnedCollapsed = !pinnedCollapsed;
+      const header = document.querySelector('.pinned-header');
+      const items = document.querySelector('.pinned-items');
+      if (header) header.classList.toggle('collapsed', pinnedCollapsed);
+      if (items) items.classList.toggle('collapsed', pinnedCollapsed);
+    }
 
     function showMsgDetail(idx) {
       currentMsgDetailIdx = idx;
@@ -3116,7 +3322,7 @@
         body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + agentExtraHtml;
       } else {
         const text = stripAnsi(m.fullText || m.text);
-        document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : 'User';
+        document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : (m.systemLabel ? 'System' : 'User');
         document.getElementById('msg-detail-agent-btn').style.display = 'none';
         body.innerHTML = renderMarkdown(text);
       }
@@ -3130,6 +3336,8 @@
       const meta = [formatDate(m.timestamp)];
       if (m.model) meta.unshift(m.model);
       document.getElementById('msg-detail-meta').textContent = meta.join(' · ');
+      currentPinDetailId = null;
+      updateMsgDetailPinState();
       overlay.classList.add('visible');
     }
 
@@ -5274,6 +5482,9 @@
         <div style="display:flex;gap:4px;align-items:center;">
           <button id="msg-detail-agent-btn" class="icon-btn" aria-label="View Agent" title="View Agent" style="display:none" onclick="closeMsgDetailModal();showAgentModal(this.dataset.agentId)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><rect x="4" y="10" width="16" height="10" rx="2"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/><path d="M12 2v4"/><path d="M2 14h2"/><path d="M20 14h2"/></svg>
+          </button>
+          <button id="msg-detail-pin-btn" class="icon-btn" aria-label="Pin message" title="Pin message" onclick="togglePinFromModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           </button>
           <button class="icon-btn" aria-label="Copy to clipboard" title="Copy to clipboard" onclick="copyMsgToClipboard(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
