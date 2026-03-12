@@ -1612,6 +1612,18 @@
     }
     .pinned-item-unpin:hover { opacity: 1; color: var(--danger, #e55); }
     .msg-pin-btn.pinned svg, #msg-detail-pin-btn.active svg { fill: var(--accent); stroke: var(--accent); }
+    .session-pin-btn {
+      position: absolute; top: 6px; right: 6px; background: none; border: none;
+      color: var(--text-muted); cursor: pointer; padding: 2px; opacity: 0;
+      transition: opacity 0.15s; z-index: 1; line-height: 0;
+    }
+    .session-item:hover .session-pin-btn:not(.pinned) { opacity: 0.5; }
+    .session-pin-btn:hover { opacity: 1 !important; color: var(--accent); }
+    .session-pin-btn.pinned { opacity: 1; color: var(--accent); }
+    .session-pin-btn.pinned svg { fill: var(--accent); stroke: var(--accent); }
+    .pinned-sessions-divider {
+      height: 1px; margin: 4px 8px; background: color-mix(in srgb, var(--accent) 30%, transparent);
+    }
     .agent-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-top: 16px; }
     .agent-tab { padding: 8px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; user-select: none; }
     .agent-tab:hover { color: var(--text-secondary); border-bottom-color: var(--text-muted); }
@@ -3297,6 +3309,27 @@
       if (items) items.classList.toggle('collapsed', pinnedCollapsed);
     }
 
+    // Session pinning
+    let pinnedSessionIds = new Set();
+
+    function loadPinnedSessions() {
+      try { return new Set(JSON.parse(localStorage.getItem('pinned-sessions')) || []); }
+      catch { return new Set(); }
+    }
+
+    function savePinnedSessions() {
+      localStorage.setItem('pinned-sessions', JSON.stringify([...pinnedSessionIds]));
+    }
+
+    function toggleSessionPin(sessionId) {
+      if (pinnedSessionIds.has(sessionId)) pinnedSessionIds.delete(sessionId);
+      else pinnedSessionIds.add(sessionId);
+      savePinnedSessions();
+      renderSessions();
+    }
+
+    const SESSION_PIN_SVG = PIN_SVG.replace('width="14" height="14"', 'width="12" height="12"');
+
     function showMsgDetail(idx) {
       currentMsgDetailIdx = idx;
       const m = currentMessages[idx];
@@ -3664,6 +3697,13 @@
         });
       }
 
+      // Always include pinned sessions even if they don't match filters
+      if (pinnedSessionIds.size > 0 && !searchQuery) {
+        const filteredIds = new Set(filteredSessions.map(s => s.id));
+        const missingPinned = sessions.filter(s => pinnedSessionIds.has(s.id) && !filteredIds.has(s.id));
+        if (missingPinned.length) filteredSessions = [...missingPinned, ...filteredSessions];
+      }
+
       if (filteredSessions.length === 0) {
         let emptyMsg = 'No sessions found';
         let emptyHint = 'Tasks appear when you use Claude Code';
@@ -3712,8 +3752,10 @@
         const isTeam = session.isTeam;
         const memberCount = session.memberCount || 0;
 
+        const isSessionPinned = pinnedSessionIds.has(session.id);
         return `
           <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''} ${!session.hasRecentLog && !session.inProgress && !session.hasWaitingForUser ? 'stale' : ''}" title="${tooltip}">
+            <span class="session-pin-btn${isSessionPinned ? ' pinned' : ''}" onclick="event.stopPropagation();toggleSessionPin('${escapeHtml(session.id)}')" title="${isSessionPinned ? 'Unpin' : 'Pin'} session">${SESSION_PIN_SVG}</span>
             <div class="session-name">${escapeHtml(primaryName)}</div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
             ${gitBranch ? `<div class="session-branch">${gitBranch}</div>` : ''}
@@ -3747,6 +3789,11 @@
           } else {
             ungrouped.push(session);
           }
+        }
+        if (pinnedSessionIds.size > 0) {
+          const pinSort = (a, b) => (pinnedSessionIds.has(b.id) ? 1 : 0) - (pinnedSessionIds.has(a.id) ? 1 : 0);
+          for (const [, arr] of groups) arr.sort(pinSort);
+          ungrouped.sort(pinSort);
         }
 
         // Stable group order: preserve existing order, append new groups sorted by recency
@@ -3803,7 +3850,10 @@
 
         sessionsList.innerHTML = html;
       } else {
-        sessionsList.innerHTML = filteredSessions.map(renderSessionCard).join('');
+        const pinned = [], unpinned = [];
+        for (const s of filteredSessions) (pinnedSessionIds.has(s.id) ? pinned : unpinned).push(s);
+        const divider = pinned.length && unpinned.length ? '<div class="pinned-sessions-divider"></div>' : '';
+        sessionsList.innerHTML = pinned.map(renderSessionCard).join('') + divider + unpinned.map(renderSessionCard).join('');
       }
 
       const items = getSessionItems();
@@ -5442,6 +5492,7 @@
     searchQuery = urlState.search || '';
 
     loadPreferences();
+    pinnedSessionIds = loadPinnedSessions();
     setupEventSource();
 
     if (urlState.search) {
