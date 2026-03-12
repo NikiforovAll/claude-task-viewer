@@ -7,6 +7,8 @@ const { existsSync, readdirSync, readFileSync, statSync, createReadStream } = re
 const readline = require('readline');
 const chokidar = require('chokidar');
 const os = require('os');
+const crypto = require('crypto');
+const { spawn } = require('child_process');
 
 const {
   readRecentMessages: _readRecentMessagesUncached,
@@ -638,6 +640,11 @@ app.get('/api/sessions/:sessionId/plan', async (req, res) => {
   }
 });
 
+function openInEditor(target) {
+  const editor = process.env.EDITOR || 'code';
+  spawn(editor, [target], { shell: true, stdio: 'ignore', detached: true }).unref();
+}
+
 // API: Open session plan in VS Code
 app.post('/api/sessions/:sessionId/plan/open', (req, res) => {
   try {
@@ -649,12 +656,24 @@ app.post('/api/sessions/:sessionId/plan/open', (req, res) => {
     const planPath = path.join(PLANS_DIR, `${slug}.md`);
     if (!existsSync(planPath)) return res.status(404).json({ error: 'No plan found' });
 
-    const editor = process.env.EDITOR || 'code';
-    require('child_process').spawn(editor, [planPath], { shell: true, stdio: 'ignore', detached: true }).unref();
+    openInEditor(planPath);
     res.json({ success: true });
   } catch (error) {
-    console.error('Error opening plan in VS Code:', error);
+    console.error('Error opening plan in editor:', error);
     res.status(500).json({ error: 'Failed to open plan' });
+  }
+});
+
+// API: Open folder in editor
+app.post('/api/open-folder', (req, res) => {
+  try {
+    const { folder } = req.body;
+    if (!folder) return res.status(400).json({ error: 'No folder provided' });
+    openInEditor(folder);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error opening folder:', error);
+    res.status(500).json({ error: 'Failed to open folder' });
   }
 });
 
@@ -665,11 +684,11 @@ app.post('/api/open-in-editor', (req, res) => {
     if (!content) return res.status(400).json({ error: 'No content provided' });
 
     const safeName = (title || 'message').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
-    const tmpFile = path.join(os.tmpdir(), `claude-kanban-${safeName}-${Date.now()}.md`);
+    const hash = crypto.createHash('md5').update(content).digest('hex').slice(0, 8);
+    const tmpFile = path.join(os.tmpdir(), `claude-kanban-${safeName}-${hash}.md`);
     require('fs').writeFileSync(tmpFile, content, 'utf8');
 
-    const editor = process.env.EDITOR || 'code';
-    require('child_process').spawn(editor, [tmpFile], { shell: true, stdio: 'ignore', detached: true }).unref();
+    openInEditor(tmpFile);
     res.json({ success: true, path: tmpFile });
   } catch (error) {
     console.error('Error opening in editor:', error);

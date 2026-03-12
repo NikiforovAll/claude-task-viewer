@@ -1589,6 +1589,8 @@
     .agent-tab-panel.active { display: block; }
     .agent-tab-copy { position: absolute; top: 14px; right: 8px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; cursor: pointer; color: var(--text-tertiary); opacity: 0.7; transition: opacity 0.15s, color 0.15s; z-index: 2; }
     .agent-tab-copy:hover { opacity: 1; color: var(--text-primary); }
+    .toast { position: fixed; bottom: 24px; left: 24px; transform: translateY(20px); background: var(--bg-elevated); color: var(--accent-text); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 600; z-index: 10000; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+    .toast.visible { opacity: 1; transform: translateY(0); }
     .rendered-md h1, .rendered-md h2, .rendered-md h3,
     .rendered-md h4, .rendered-md h5, .rendered-md h6 {
       margin-top: 1em;
@@ -3136,6 +3138,19 @@
       msgDetailFollowLatest = false;
     }
 
+    let _toastTimer = null;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      clearTimeout(_toastTimer);
+      el.style.transition = 'none';
+      el.classList.remove('visible');
+      void el.offsetHeight;
+      el.style.transition = '';
+      el.textContent = msg;
+      el.classList.add('visible');
+      _toastTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+    }
+
     async function copyWithFeedback(text, btn) {
       if (btn.dataset.copying) return;
       try {
@@ -3158,6 +3173,19 @@
       copyWithFeedback(content, btn);
     }
 
+    async function postAndToast(url, body, label) {
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        showToast(r.ok ? `Opened ${label}` : `Failed to open ${label}`);
+      } catch (e) {
+        showToast(`Failed to open ${label}`);
+      }
+    }
+
     async function openMsgInEditor() {
       const m = currentMessages[currentMsgDetailIdx];
       if (!m) return;
@@ -3165,15 +3193,7 @@
         ? (m.fullDetail || m.detail || '')
         : stripAnsi(m.fullText || m.text);
       const title = m.type === 'tool_use' ? m.tool : m.type;
-      try {
-        await fetch('/api/open-in-editor', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content, title })
-        });
-      } catch (e) {
-        console.error('Failed to open in editor:', e);
-      }
+      postAndToast('/api/open-in-editor', { content, title }, 'in editor');
     }
 
     function formatDuration(ms) {
@@ -4972,7 +4992,11 @@
       infoRows.forEach(([label, value]) => {
         const copyVal = escapeHtml(value).replace(/"/g, '&quot;');
         html += `<span style="font-weight: 500; color: var(--text-secondary); font-size: 12px; white-space: nowrap;">${label}</span>`;
-        html += `<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; user-select: all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${copyVal}">${escapeHtml(value)}</span>`;
+        if (label === 'Path') {
+          html += `<span data-folder="${copyVal}" onclick="openFolderInEditor(this.dataset.folder)" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; color: var(--accent-text); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;" title="Open in editor">${escapeHtml(value)}</span>`;
+        } else {
+          html += `<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; user-select: all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${copyVal}">${escapeHtml(value)}</span>`;
+        }
         html += `<button onclick="navigator.clipboard.writeText('${copyVal.replace(/'/g, "\\'")}'); this.textContent='✓'; setTimeout(() => this.textContent='Copy', 1000)" style="padding: 2px 8px; font-size: 11px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Copy</button>`;
       });
       html += `</div>`;
@@ -5109,7 +5133,11 @@
 
     function openPlanInEditor() {
       if (!_planSessionId) return;
-      fetch(`/api/sessions/${_planSessionId}/plan/open`, { method: 'POST' }).catch(() => {});
+      postAndToast(`/api/sessions/${_planSessionId}/plan/open`, {}, 'in editor');
+    }
+
+    function openFolderInEditor(folder) {
+      postAndToast('/api/open-folder', { folder }, 'folder');
     }
 
     function updateOwnerFilter() {
@@ -5499,5 +5527,6 @@
       </div>
     </div>
   </div>
+  <div id="toast" class="toast"></div>
 </body>
 </html>
