@@ -233,7 +233,7 @@ describe('Parser: parseJsonlLine', () => {
   });
 
   it('parses file-history-snapshot', () => {
-    const parsed = parseJsonlLine(lines[5]);
+    const parsed = parseJsonlLine(lines[6]);
     assert.equal(parsed.type, 'file-history-snapshot');
   });
 });
@@ -287,6 +287,19 @@ describe('Parser: readRecentMessages', () => {
     assert.equal(agentMsg.toolUseId, 'tu_agent_01');
     assert.equal(agentMsg.agentType, 'Explore');
     assert.equal(agentMsg.agentPrompt, 'Find all auth middleware files');
+  });
+
+  it('attaches tool_result to matching tool_use messages', () => {
+    const messages = readRecentMessages(jsonlPath, 20);
+    const readMsg = messages.find(m => m.tool === 'Read');
+    assert.ok(readMsg, 'should find a Read tool_use message');
+    assert.ok(readMsg.toolResult, 'Read message should have toolResult');
+    assert.ok(readMsg.toolResult.includes('import { hash }'), 'toolResult should contain file content');
+
+    const bashMsg = messages.find(m => m.tool === 'Bash');
+    assert.ok(bashMsg, 'should find a Bash tool_use message');
+    assert.ok(bashMsg.toolResult, 'Bash message should have toolResult');
+    assert.ok(bashMsg.toolResult.includes('authenticate'), 'toolResult should contain grep output');
   });
 });
 

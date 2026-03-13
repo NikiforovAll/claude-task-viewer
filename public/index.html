@@ -3277,7 +3277,9 @@
       if (pin.type === 'tool_use') {
         document.getElementById('msg-detail-title').textContent = pin.tool || 'Tool';
         const fullText = pin.fullDetail || pin.detail || '';
-        body.innerHTML = fullText ? `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>';
+        const pinParamsHtml = renderToolParamsHtml(pin.params);
+        const pinResultHtml = renderToolResultHtml(pin.toolResult, pin.toolResultTruncated);
+        body.innerHTML = (fullText ? `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + pinParamsHtml + pinResultHtml;
         agentBtn.style.display = 'none';
       } else {
         const text = stripAnsi(pin.fullText || pin.text || '');
@@ -3352,7 +3354,9 @@
         } else {
           agentBtn.style.display = 'none';
         }
-        body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + agentExtraHtml;
+        const toolParamsHtml = renderToolParamsHtml(m.params);
+        const toolResultHtml = renderToolResultHtml(m.toolResult, m.toolResultTruncated);
+        body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + toolParamsHtml + toolResultHtml + agentExtraHtml;
       } else {
         const text = stripAnsi(m.fullText || m.text);
         document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : (m.systemLabel ? 'System' : 'User');
@@ -3405,11 +3409,57 @@
       }
     }
 
+    function renderToolParamsHtml(params) {
+      if (!params) return '';
+      const items = [];
+      for (const [k, v] of Object.entries(params)) {
+        if (k === 'old_string' || k === 'new_string' || k === 'content') continue;
+        const display = typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
+        items.push(`<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:3px;background:var(--bg-secondary);font-size:0.75rem"><span style="color:var(--text-muted)">${escapeHtml(k)}:</span> ${escapeHtml(display)}</span>`);
+      }
+      let html = '';
+      if (items.length) html += `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${items.join('')}</div>`;
+      if (params.old_string || params.new_string) {
+        html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">`;
+        if (params.old_string) {
+          html += `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px">old_string</div>
+            <pre class="msg-detail-pre" style="max-height:200px;overflow:auto;border-left:3px solid #e55;padding-left:8px">${escapeHtml(params.old_string)}</pre>`;
+        }
+        if (params.new_string) {
+          html += `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px;margin-top:6px">new_string</div>
+            <pre class="msg-detail-pre" style="max-height:200px;overflow:auto;border-left:3px solid #5b5;padding-left:8px">${escapeHtml(params.new_string)}</pre>`;
+        }
+        html += `</div>`;
+      }
+      if (params.content) {
+        html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px">content</div>
+          <pre class="msg-detail-pre" style="max-height:300px;overflow:auto">${escapeHtml(params.content.length > 2000 ? params.content.slice(0, 2000) + '\n... (truncated)' : params.content)}</pre>
+        </div>`;
+      }
+      return html;
+    }
+
+    function renderToolResultHtml(toolResult, isTruncated) {
+      if (!toolResult) return '';
+      const label = isTruncated ? '<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px">(truncated)</span>' : '';
+      return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Output${label}</div>
+        <pre class="msg-detail-pre" style="max-height:400px;overflow:auto">${escapeHtml(toolResult)}</pre>
+      </div>`;
+    }
+
+    function buildToolContent(m) {
+      let content = m.fullDetail || m.detail || '';
+      if (m.toolResult) content += '\n\n--- Output ---\n\n' + (m.toolResultFull || m.toolResult);
+      return content;
+    }
+
     async function copyMsgToClipboard(btn) {
       const m = currentMessages[currentMsgDetailIdx];
       if (!m) return;
       const content = m.type === 'tool_use'
-        ? (m.fullDetail || m.detail || '')
+        ? buildToolContent(m)
         : stripAnsi(m.fullText || m.text);
       copyWithFeedback(content, btn);
     }
@@ -3431,7 +3481,7 @@
       const m = currentMessages[currentMsgDetailIdx];
       if (!m) return;
       const content = m.type === 'tool_use'
-        ? (m.fullDetail || m.detail || '')
+        ? buildToolContent(m)
         : stripAnsi(m.fullText || m.text);
       const title = m.type === 'tool_use' ? m.tool : m.type;
       postAndToast('/api/open-in-editor', { content, title }, 'in editor');

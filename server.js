@@ -799,9 +799,9 @@ app.get('/api/sessions/:sessionId/messages', (req, res) => {
           }
         } catch (_) {}
       }
-      delete msg.toolUseId;
     }
   }
+  for (const msg of messages) if (msg.toolUseId) delete msg.toolUseId;
   res.json({ messages, sessionId: req.params.sessionId });
 });
 
