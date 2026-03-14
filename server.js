@@ -13,7 +13,8 @@ const { spawn } = require('child_process');
 const {
   readRecentMessages: _readRecentMessagesUncached,
   readSessionInfoFromJsonl,
-  buildAgentProgressMap
+  buildAgentProgressMap,
+  readCompactSummaries
 } = require('./lib/parsers');
 
 const isSetupCommand = process.argv.includes('--install') || process.argv.includes('--uninstall');
@@ -801,7 +802,20 @@ app.get('/api/sessions/:sessionId/messages', (req, res) => {
       }
     }
   }
-  for (const msg of messages) if (msg.toolUseId) delete msg.toolUseId;
+  const compactSummaries = readCompactSummaries(jsonlPath);
+  // Match compaction messages to summaries by chronological order
+  const compactedMsgs = messages
+    .filter(m => m.systemLabel === 'Compacted')
+    .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+  for (let i = 0; i < compactedMsgs.length; i++) {
+    if (i < compactSummaries.length) {
+      compactedMsgs[i].compactSummary = compactSummaries[i].summary;
+    }
+  }
+  for (const msg of messages) {
+    if (msg.toolUseId) delete msg.toolUseId;
+    delete msg.promptId;
+  }
   res.json({ messages, sessionId: req.params.sessionId });
 });
 
@@ -899,6 +913,7 @@ app.put('/api/tasks/:sessionId/:taskId', async (req, res) => {
 
     if (subject !== undefined) task.subject = subject;
     if (description !== undefined) task.description = description;
+    if (req.body.status !== undefined) task.status = req.body.status;
 
     await fs.writeFile(taskPath, JSON.stringify(task, null, 2));
 

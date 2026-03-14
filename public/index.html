@@ -870,6 +870,13 @@
     .task-card.blocked {
       opacity: 0.7;
     }
+    .task-card.dragging { opacity: 0.4; }
+    .column-tasks.drag-over {
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      border-radius: 8px;
+      outline: 2px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+      outline-offset: -2px;
+    }
 
     .task-card.selected,
     .task-card.selected:hover {
@@ -1298,9 +1305,7 @@
 
     /* Note form */
     .note-section {
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 1px solid var(--border);
+      margin-top: 8px;
     }
 
     .note-form {
@@ -1586,7 +1591,7 @@
       cursor: pointer; padding: 2px; opacity: 0; transition: opacity 0.15s;
       margin-left: auto; align-self: flex-start;
     }
-    .msg-item:hover .msg-pin-btn { opacity: 0.6; }
+    .msg-item:hover .msg-pin-btn, .agent-card:hover .msg-pin-btn { opacity: 0.6; }
     .msg-pin-btn:hover { opacity: 1 !important; color: var(--accent); }
     .msg-pin-btn.pinned { opacity: 1; color: var(--accent); }
     #message-panel-pinned:empty { display: none; }
@@ -2511,7 +2516,7 @@
               <span class="column-title pending">Pending</span>
               <span id="pending-count" class="column-count pending">0</span>
             </div>
-            <div id="pending-tasks" class="column-tasks" role="list"></div>
+            <div id="pending-tasks" class="column-tasks" role="list" data-status="pending" ondragover="onColumnDragOver(event)" ondragleave="onColumnDragLeave(event)" ondrop="onColumnDrop(event)"></div>
           </div>
 
           <div class="kanban-column" aria-label="In progress tasks">
@@ -2520,7 +2525,7 @@
               <span class="column-title in-progress">In Progress</span>
               <span id="in-progress-count" class="column-count in-progress">0</span>
             </div>
-            <div id="in-progress-tasks" class="column-tasks" role="list"></div>
+            <div id="in-progress-tasks" class="column-tasks" role="list" data-status="in_progress" ondragover="onColumnDragOver(event)" ondragleave="onColumnDragLeave(event)" ondrop="onColumnDrop(event)"></div>
           </div>
 
           <div class="kanban-column" aria-label="Completed tasks">
@@ -2529,7 +2534,7 @@
               <span class="column-title completed">Completed</span>
               <span id="completed-count" class="column-count completed">0</span>
             </div>
-            <div id="completed-tasks" class="column-tasks" role="list"></div>
+            <div id="completed-tasks" class="column-tasks" role="list" data-status="completed" ondragover="onColumnDragOver(event)" ondragleave="onColumnDragLeave(event)" ondrop="onColumnDrop(event)"></div>
           </div>
         </div>
         <div id="agent-footer" class="agent-footer">
@@ -2677,6 +2682,7 @@
     const detailPanel = document.getElementById('detail-panel');
     const detailContent = document.getElementById('detail-content');
     const connectionStatus = document.getElementById('connection-status');
+    const CONTENT_TRUNCATE_MAX = 1500;
     const COLUMNS = [
       { el: pendingTasks },
       { el: inProgressTasks },
@@ -3132,6 +3138,14 @@
             ${MSG_ICON_TOOL}
             <div class="msg-body"><div class="msg-text">${escapeHtml(p.tool || '')}${toolDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
           </div>`;
+        } else if (p.type === 'agent') {
+          const agentClick = `onclick="showAgentModal('${escapeHtml(p.agentId)}')" style="cursor:pointer"`;
+          const msgTrunc = p.lastMessage ? escapeHtml(stripAnsi(p.lastMessage.trim()).replace(/[\r\n]+/g, ' ').slice(0, 60)) : '';
+          const agentDetail = msgTrunc ? ` <span style="color:var(--text-muted)">${msgTrunc}</span>` : '';
+          return `<div class="msg-item msg-tool" ${agentClick}>
+            ${MSG_ICON_TOOL}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(p.agentType || 'Agent')}${agentDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
+          </div>`;
         }
         return '';
       }).join('');
@@ -3221,6 +3235,30 @@
 
     function isPinned(m) { return currentPins.some(p => p.id === getPinId(m)); }
 
+    function isAgentPinned(agentId) { return currentPins.some(p => p.id === `agent|${agentId}`); }
+
+    function toggleAgentPin(agentId) {
+      const agent = currentAgents.find(a => a.agentId === agentId);
+      if (!agent || !currentSessionId) return;
+      const id = `agent|${agentId}`;
+      const idx = currentPins.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        currentPins.splice(idx, 1);
+      } else {
+        pinnedCollapsed = false;
+        currentPins.push({
+          id, type: 'agent', agentId: agent.agentId,
+          agentType: agent.type || 'unknown',
+          lastMessage: agent.lastMessage || null,
+          timestamp: agent.startedAt || agent.updatedAt,
+          pinnedAt: new Date().toISOString()
+        });
+      }
+      savePins(currentSessionId, currentPins);
+      renderMessages(currentMessages);
+      renderAgentFooter();
+    }
+
     function togglePin(msgIndex) {
       const m = currentMessages[msgIndex];
       if (!m || !currentSessionId) return;
@@ -3246,9 +3284,11 @@
 
     function unpinById(pinIdx) {
       if (!currentSessionId || pinIdx < 0 || pinIdx >= currentPins.length) return;
+      const wasAgent = currentPins[pinIdx].type === 'agent';
       currentPins.splice(pinIdx, 1);
       savePins(currentSessionId, currentPins);
       renderMessages(currentMessages);
+      if (wasAgent) renderAgentFooter();
       updateMsgDetailPinState();
     }
 
@@ -3278,8 +3318,10 @@
         document.getElementById('msg-detail-title').textContent = pin.tool || 'Tool';
         const fullText = pin.fullDetail || pin.detail || '';
         const pinParamsHtml = renderToolParamsHtml(pin.params);
-        const pinResultHtml = renderToolResultHtml(pin.toolResult, pin.toolResultTruncated);
-        body.innerHTML = (fullText ? `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + pinParamsHtml + pinResultHtml;
+        const pinResultHtml = renderToolResultHtml(pin.toolResult, pin.toolResultTruncated, pin.tool, pin.toolResultFull);
+        const pinDetailEscaped = escapeHtml(fullText);
+        const pinDetailRendered = pin.tool === 'Bash' ? highlightBash(pinDetailEscaped) : pinDetailEscaped;
+        body.innerHTML = (fullText ? `<pre class="msg-detail-pre">${pinDetailRendered}</pre>` : '<em>No details</em>') + pinParamsHtml + pinResultHtml;
         agentBtn.style.display = 'none';
       } else {
         const text = stripAnsi(pin.fullText || pin.text || '');
@@ -3288,6 +3330,14 @@
         body.innerHTML = renderMarkdown(text);
       }
       document.getElementById('msg-detail-meta').textContent = formatDate(pin.timestamp);
+      const pinModal = document.getElementById('msg-detail-modal').querySelector('.modal');
+      const pinHasTable = body.querySelector('table') !== null;
+      const pinContentLen = body.textContent.length;
+      const pinHasPre = body.querySelector('pre') !== null;
+      const pinModalWidth = pinHasTable ? '1100px'
+        : (pinContentLen > 2000 || pinHasPre) ? '960px'
+        : '860px';
+      pinModal.style.maxWidth = pinModalWidth;
       const pinBtn = document.getElementById('msg-detail-pin-btn');
       if (pinBtn) pinBtn.classList.add('active');
       document.getElementById('msg-detail-modal').classList.add('visible');
@@ -3355,17 +3405,28 @@
           agentBtn.style.display = 'none';
         }
         const toolParamsHtml = renderToolParamsHtml(m.params);
-        const toolResultHtml = renderToolResultHtml(m.toolResult, m.toolResultTruncated);
-        body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${escapeHtml(fullText)}</pre>` : '<em>No details</em>') + toolParamsHtml + toolResultHtml + agentExtraHtml;
+        const toolResultHtml = renderToolResultHtml(m.toolResult, m.toolResultTruncated, m.tool, m.toolResultFull);
+        const detailEscaped = escapeHtml(fullText);
+        const detailRendered = m.tool === 'Bash' ? highlightBash(detailEscaped) : detailEscaped;
+        body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${detailRendered}</pre>` : '<em>No details</em>') + toolParamsHtml + toolResultHtml + agentExtraHtml;
       } else {
         const text = stripAnsi(m.fullText || m.text);
         document.getElementById('msg-detail-title').textContent = m.type === 'assistant' ? 'Claude' : (m.systemLabel ? 'System' : 'User');
         document.getElementById('msg-detail-agent-btn').style.display = 'none';
-        body.innerHTML = renderMarkdown(text);
+        if (m.compactSummary) {
+          body.innerHTML = renderMarkdown(m.compactSummary);
+        } else {
+          body.innerHTML = renderMarkdown(text);
+        }
       }
       const modal = document.getElementById('msg-detail-modal').querySelector('.modal');
       const hasTable = body.querySelector('table') !== null;
-      modal.style.maxWidth = hasTable ? '1100px' : '860px';
+      const contentLen = body.textContent.length;
+      const hasPre = body.querySelector('pre') !== null;
+      const modalWidth = hasTable ? '1100px'
+        : (contentLen > 2000 || hasPre) ? '960px'
+        : '860px';
+      modal.style.maxWidth = modalWidth;
       modal.classList.toggle('live', msgDetailFollowLatest);
       const overlay = document.getElementById('msg-detail-modal');
       overlay.classList.toggle('live-overlay', msgDetailFollowLatest);
@@ -3411,14 +3472,22 @@
 
     function renderToolParamsHtml(params) {
       if (!params) return '';
-      const items = [];
+      const BLOCK_KEYS = new Set(['old_string', 'new_string', 'content']);
+      const badges = [], blocks = [];
       for (const [k, v] of Object.entries(params)) {
-        if (k === 'old_string' || k === 'new_string' || k === 'content') continue;
+        if (BLOCK_KEYS.has(k)) continue;
         const display = typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
-        items.push(`<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:3px;background:var(--bg-secondary);font-size:0.75rem"><span style="color:var(--text-muted)">${escapeHtml(k)}:</span> ${escapeHtml(display)}</span>`);
+        if (display.length > 60) {
+          blocks.push({ k, display });
+        } else {
+          badges.push(`<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:3px;background:var(--bg-secondary);font-size:0.75rem"><span style="color:var(--text-muted)">${escapeHtml(k)}:</span> ${escapeHtml(display)}</span>`);
+        }
       }
       let html = '';
-      if (items.length) html += `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${items.join('')}</div>`;
+      if (badges.length) html += `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${badges.join('')}</div>`;
+      for (const { k, display } of blocks) {
+        html += `<div style="margin-top:6px;font-size:0.75rem"><span style="color:var(--text-muted)">${escapeHtml(k)}:</span> <span style="word-break:break-all">${escapeHtml(display)}</span></div>`;
+      }
       if (params.old_string || params.new_string) {
         html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">`;
         if (params.old_string) {
@@ -3432,20 +3501,59 @@
         html += `</div>`;
       }
       if (params.content) {
+        const contentTruncated = params.content.length > CONTENT_TRUNCATE_MAX;
+        const truncContent = contentTruncated ? params.content.slice(0, CONTENT_TRUNCATE_MAX) + '\n... (truncated)' : params.content;
+        const writeMoreId = contentTruncated ? `write-more-${Date.now()}-${Math.random().toString(36).slice(2,8)}` : null;
+        const writeMoreBtn = writeMoreId
+          ? ` <button onclick="var f=document.getElementById('${writeMoreId}'),t=this.parentElement.nextElementSibling,expand=f.style.display==='none';f.style.display=expand?'block':'none';t.style.display=expand?'none':'block';this.textContent=expand?'Show less':'Show more'" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.75rem;text-decoration:underline">Show more</button>`
+          : '';
+        const fullBlock = writeMoreId
+          ? `<pre id="${writeMoreId}" class="msg-detail-pre" style="max-height:500px;overflow:auto;display:none">${escapeHtml(params.content)}</pre>`
+          : '';
         html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px">content</div>
-          <pre class="msg-detail-pre" style="max-height:300px;overflow:auto">${escapeHtml(params.content.length > 2000 ? params.content.slice(0, 2000) + '\n... (truncated)' : params.content)}</pre>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px">content${writeMoreBtn}</div>
+          <pre class="msg-detail-pre" style="max-height:300px;overflow:auto">${escapeHtml(truncContent)}</pre>
+          ${fullBlock}
         </div>`;
       }
       return html;
     }
 
-    function renderToolResultHtml(toolResult, isTruncated) {
+    // Strip cat -n style line number prefix (e.g. "   1→" or "   1\t") from tool output
+    function stripLineNumbers(text) {
+      return text.replace(/^ *\d+[→\t]/gm, '');
+    }
+
+    function highlightBash(escaped) {
+      return escaped
+        .replace(/^(\s*)(#.*)$/gm, '$1<span style="color:#6a9955">$2</span>')
+        .replace(/(&#x27;[^]*?&#x27;|&quot;[^]*?&quot;)/g, '<span style="color:#ce9178">$1</span>')
+        .replace(/\b(if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|in|select)\b/g, '<span style="color:#c586c0">$1</span>')
+        .replace(/\b(echo|cd|ls|cat|grep|awk|sed|rm|cp|mv|mkdir|chmod|chown|export|source|exit|test|read|printf|set|unset|eval|exec|trap|wait|kill|sudo|apt|npm|npx|git|docker|curl|wget|pip|python|node|make|dotnet)\b/g, '<span style="color:#569cd6">$1</span>')
+        .replace(/(\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*)/g, '<span style="color:#9cdcfe">$1</span>')
+        .replace(/((?:^|\s)(?:&amp;&amp;|\|\||[|;])(?:\s|$))/g, '<span style="color:#d4d4d4;font-weight:bold">$1</span>');
+    }
+
+    function renderToolResultHtml(toolResult, isTruncated, toolName, fullResult) {
       if (!toolResult) return '';
-      const label = isTruncated ? '<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px">(truncated)</span>' : '';
+      const stripped = stripLineNumbers(toolResult);
+      const escaped = escapeHtml(stripped);
+      const showMoreId = isTruncated && fullResult ? `show-more-${Date.now()}-${Math.random().toString(36).slice(2,8)}` : null;
+      const truncLabel = isTruncated
+        ? showMoreId
+          ? `<button onclick="var f=document.getElementById('${showMoreId}'),t=this.parentElement.nextElementSibling,expand=f.style.display==='none';f.style.display=expand?'block':'none';t.style.display=expand?'none':'block';this.textContent=expand?'Show less':'Show more'" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.8rem;margin-left:6px;text-decoration:underline">Show more</button>`
+          : '<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px">(truncated)</span>'
+        : '';
+      let fullBlock = '';
+      if (showMoreId) {
+        const fullStripped = stripLineNumbers(fullResult);
+        const fullEscaped = escapeHtml(fullStripped);
+        fullBlock = `<pre id="${showMoreId}" class="msg-detail-pre" style="overflow:auto;display:none">${fullEscaped}</pre>`;
+      }
       return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
-        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Output${label}</div>
-        <pre class="msg-detail-pre" style="max-height:400px;overflow:auto">${escapeHtml(toolResult)}</pre>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Output${truncLabel}</div>
+        <pre class="msg-detail-pre" style="overflow:auto">${escaped}</pre>
+        ${fullBlock}
       </div>`;
     }
 
@@ -3455,8 +3563,14 @@
       return content;
     }
 
+    function getDetailMsg() {
+      if (currentMsgDetailIdx != null) return currentMessages[currentMsgDetailIdx];
+      if (currentPinDetailId) return currentPins.find(p => p.id === currentPinDetailId);
+      return null;
+    }
+
     async function copyMsgToClipboard(btn) {
-      const m = currentMessages[currentMsgDetailIdx];
+      const m = getDetailMsg();
       if (!m) return;
       const content = m.type === 'tool_use'
         ? buildToolContent(m)
@@ -3478,7 +3592,7 @@
     }
 
     async function openMsgInEditor() {
-      const m = currentMessages[currentMsgDetailIdx];
+      const m = getDetailMsg();
       if (!m) return;
       const content = m.type === 'tool_use'
         ? buildToolContent(m)
@@ -3559,13 +3673,16 @@
         const msgTrunc = msgTrimmed.length > 60 ? msgTrimmed.substring(0, 60) + '…' : msgTrimmed;
         const msgHtml = msgTrunc
           ? `<div class="agent-message" title="${escapeHtml(msgTrimmed)}">${escapeHtml(msgTrunc)}</div>` : '';
+        const agentPinned = isAgentPinned(a.agentId);
+        const agentPinBtn = `<button class="msg-pin-btn${agentPinned ? ' pinned' : ''}" onclick="event.stopPropagation();toggleAgentPin('${a.agentId}')" title="${agentPinned ? 'Unpin' : 'Pin'} agent">${PIN_SVG}</button>`;
         return `<div class="agent-card" onclick="showAgentModal('${a.agentId}')">
           <span class="agent-dot ${a.status}"></span>
-          <div>
+          <div style="flex:1;min-width:0">
             <div class="agent-type">${escapeHtml(a.type || 'unknown')}</div>
             <div class="agent-status">${statusText}</div>
             ${msgHtml}
           </div>
+          ${agentPinBtn}
         </div>`;
       }).join('');
 
@@ -3900,10 +4017,7 @@
 
         sessionsList.innerHTML = html;
       } else {
-        const pinned = [], unpinned = [];
-        for (const s of filteredSessions) (pinnedSessionIds.has(s.id) ? pinned : unpinned).push(s);
-        const divider = pinned.length && unpinned.length ? '<div class="pinned-sessions-divider"></div>' : '';
-        sessionsList.innerHTML = pinned.map(renderSessionCard).join('') + divider + unpinned.map(renderSessionCard).join('');
+        sessionsList.innerHTML = filteredSessions.map(renderSessionCard).join('');
       }
 
       const items = getSessionItems();
@@ -3986,6 +4100,9 @@
           data-task-id="${task.id}"
           data-session-id="${actualSessionId}"
           onclick="showTaskDetail('${task.id}', '${actualSessionId}')"
+          draggable="true"
+          ondragstart="onCardDragStart(event)"
+          ondragend="onCardDragEnd(event)"
           class="task-card ${statusClass} ${isBlocked ? 'blocked' : ''}"
           aria-label="${escapeHtml(task.subject)} — ${task.status.replace('_',' ')}">
           <div class="task-id">
@@ -4042,6 +4159,57 @@
           showTaskDetail(selectedTaskId, selectedSessionId);
         }
       }
+    }
+
+    function onCardDragStart(e) {
+      const card = e.target.closest('.task-card');
+      if (!card) return;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        taskId: card.dataset.taskId,
+        sessionId: card.dataset.sessionId
+      }));
+    }
+
+    function onCardDragEnd(e) {
+      const card = e.target.closest('.task-card');
+      if (card) card.classList.remove('dragging');
+      document.querySelectorAll('.column-tasks.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function onColumnDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function onColumnDragLeave(e) {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('drag-over');
+      }
+    }
+
+    async function onColumnDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      const newStatus = e.currentTarget.dataset.status;
+      let data;
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(_) { return; }
+      const { taskId, sessionId } = data;
+      const task = currentTasks.find(t => t.id === taskId && (t.sessionId || currentSessionId) === sessionId);
+      if (!task || task.status === newStatus) return;
+      try {
+        const res = await fetch(`/api/tasks/${sessionId}/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+          task.status = newStatus;
+          renderKanban();
+        }
+      } catch(_) {}
     }
 
     function selectTask(taskId, sessionId) {
@@ -4146,6 +4314,7 @@
       let el = header.nextElementSibling;
       while (el && !el.classList.contains('project-group-sessions')) el = el.nextElementSibling;
       if (el) el.classList.toggle('collapsed', collapsed);
+      try { localStorage.setItem('collapsedGroups', JSON.stringify([...collapsedProjectGroups])); } catch(_) {}
     }
 
     function toggleSelectedSessionGroup(collapse) {
@@ -4302,23 +4471,21 @@
           </div>
         ` : ''}
 
+        ${task.blockedBy && task.blockedBy.length > 0 ? `
         <div class="detail-section">
           <div class="detail-label">Blocked By</div>
           <div class="detail-deps">
-            ${task.blockedBy && task.blockedBy.length > 0
-              ? `<div class="detail-box blocked"><strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}</div>`
-              : '<em style="color: var(--text-muted); font-size: 13px;">No dependencies</em>'}
+            <div class="detail-box blocked"><strong>Blocked by:</strong> ${task.blockedBy.map(id => '#' + id).join(', ')}</div>
           </div>
-        </div>
+        </div>` : ''}
 
+        ${task.blocks && task.blocks.length > 0 ? `
         <div class="detail-section">
           <div class="detail-label">Blocks</div>
           <div class="detail-deps">
-            ${task.blocks && task.blocks.length > 0
-              ? `<div class="detail-box blocks"><strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}</div>`
-              : '<em style="color: var(--text-muted); font-size: 13px;">No tasks blocked</em>'}
+            <div class="detail-box blocks"><strong>Blocks:</strong> ${task.blocks.map(id => '#' + id).join(', ')}</div>
           </div>
-        </div>
+        </div>` : ''}
 
         <div class="detail-section note-section">
           <label for="note-input" class="detail-label">Add Note</label>
@@ -5526,6 +5693,7 @@
     });
 
     loadSidebarState();
+    try { const cg = JSON.parse(localStorage.getItem('collapsedGroups') || '[]'); cg.forEach(p => collapsedProjectGroups.add(p)); } catch(_) {}
     initSidebarResize();
     loadPanelWidths();
     initPanelResize('detail-panel', 'detail-panel-resize', '--detail-panel-width', 'detail-panel-width');
