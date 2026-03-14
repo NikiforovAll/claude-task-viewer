@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code Kanban — Watch Claude Code work, in real time</title>
+  <meta name="description" content="A real-time Kanban dashboard for observing Claude Code tasks, agents, and teams. Zero config, zero build step.">
+  <meta property="og:title" content="Claude Code Kanban">
+  <meta property="og:description" content="Watch Claude Code work, in real time. A live Kanban dashboard for Claude Code tasks and agents.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nikiforovall.blog/claude-code-kanban/">
+  <meta property="og:image" content="https://raw.githubusercontent.com/NikiforovAll/claude-code-kanban/main/assets/screenshot-dark-v2.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a1a'/%3E%3Crect x='4' y='6' width='7' height='20' rx='2' fill='%23e8927c'/%3E%3Crect x='13' y='6' width='7' height='14' rx='2' fill='%23e8927c'/%3E%3Crect x='22' y='6' width='7' height='8' rx='2' fill='%23e8927c'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #faf9f7;
+      --bg-alt: #f3f1ee;
+      --bg-dark: #1a1a1a;
+      --text: #2a2a2a;
+      --text-secondary: #5a5a5a;
+      --text-muted: #8a8a8a;
+      --accent: #E86F33;
+      --accent-light: #e8927c;
+      --accent-dim: rgba(232, 111, 51, 0.1);
+      --accent-glow: rgba(232, 111, 51, 0.25);
+      --border: #e0ddd8;
+      --mono: 'IBM Plex Mono', monospace;
+      --serif: 'Playfair Display', serif;
+      --max-w: 1120px;
+      --section-gap: 120px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--mono);
+      font-size: 15px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grain texture */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-size: 256px 256px;
+      z-index: 9999;
+    }
+
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 32px; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(250, 249, 247, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      transition: box-shadow 0.3s;
+    }
+    nav.scrolled { box-shadow: 0 1px 8px rgba(0,0,0,0.06); }
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .nav-brand svg { width: 28px; height: 28px; }
+    .nav-brand span {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: -0.02em;
+    }
+    .nav-links { display: flex; align-items: center; gap: 24px; }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-gh {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text);
+      text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .nav-gh:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .nav-gh svg { width: 16px; height: 16px; }
+
+    /* ── HERO ── */
+    .hero {
+      padding-top: 140px;
+      padding-bottom: var(--section-gap);
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(232, 111, 51, 0.2);
+      border-radius: 100px;
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+      margin-bottom: 32px;
+      letter-spacing: 0.02em;
+    }
+    .hero-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .hero h1 {
+      font-family: var(--serif);
+      font-size: clamp(40px, 6vw, 68px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      color: var(--bg-dark);
+      margin-bottom: 24px;
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+    .hero-sub {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 520px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    /* Install block */
+    .install-block {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      background: var(--bg-dark);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 56px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.05) inset;
+    }
+    .install-block code {
+      display: block;
+      padding: 14px 20px 14px 24px;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: #f0f1f3;
+      white-space: nowrap;
+      letter-spacing: -0.01em;
+    }
+    .install-block code .prompt { color: var(--accent-light); }
+    .install-copy {
+      padding: 14px 18px;
+      background: none;
+      border: none;
+      border-left: 1px solid #333;
+      color: #888;
+      cursor: pointer;
+      transition: color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+    }
+    .install-copy:hover { color: #fff; background: rgba(255,255,255,0.05); }
+    .install-copy svg { width: 16px; height: 16px; }
+    .install-copy.copied { color: #3ecf8e; }
+
+    /* Hero screenshot */
+    .hero-screenshot {
+      max-width: 960px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow:
+        0 8px 40px rgba(0,0,0,0.12),
+        0 2px 8px rgba(0,0,0,0.06);
+      transform: perspective(1200px) rotateX(2deg);
+      transition: transform 0.4s ease;
+    }
+    .hero-screenshot:hover { transform: perspective(1200px) rotateX(0deg); }
+    .hero-screenshot img {
+      width: 100%;
+      display: block;
+    }
+
+    /* ── FEATURES ── */
+    .features { padding-bottom: var(--section-gap); }
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: var(--serif);
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 600;
+      color: var(--bg-dark);
+      letter-spacing: -0.02em;
+      margin-bottom: 56px;
+      line-height: 1.2;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .feature-card {
+      padding: 28px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+    }
+    .feature-card:hover {
+      border-color: var(--accent-light);
+      box-shadow: 0 4px 20px var(--accent-glow);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-dim);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      color: var(--accent);
+      font-size: 18px;
+    }
+    .feature-card h3 {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--bg-dark);
+    }
+    .feature-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-it-works {
+      padding-bottom: var(--section-gap);
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      position: relative;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 32px;
+      left: calc(33.33% / 2 + 32px);
+      right: calc(33.33% / 2 + 32px);
+      height: 2px;
+      background: var(--border);
+    }
+    .step {
+      text-align: center;
+      position: relative;
+    }
+    .step-num {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--serif);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--bg);
+      border: 2px solid var(--border);
+      margin: 0 auto 20px;
+      position: relative;
+      z-index: 1;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .step:hover .step-num {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .step-code {
+      display: inline-block;
+      padding: 8px 16px;
+      background: var(--bg-dark);
+      border-radius: 6px;
+      font-size: 12px;
+      color: #f0f1f3;
+      margin-top: 12px;
+      font-family: var(--mono);
+    }
+    .step h3 {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--bg-dark);
+    }
+    .step p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 260px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── SCREENSHOTS ── */
+    .screenshots {
+      padding-bottom: var(--section-gap);
+    }
+    .screenshots-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 40px;
+    }
+    .theme-toggle {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--bg-alt);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .theme-toggle button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .theme-toggle button.active {
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .screenshot-frame {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+    }
+    .screenshot-frame img {
+      width: 100%;
+      display: block;
+    }
+    .screenshot-frame img.hidden { display: none; }
+
+    /* ── FAQ ── */
+    .faq { padding-bottom: var(--section-gap); }
+    .faq-list { max-width: 720px; }
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+    }
+    .faq-item:first-child { border-top: 1px solid var(--border); }
+    .faq-q {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 20px 0;
+      background: none;
+      border: none;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      gap: 16px;
+    }
+    .faq-q:hover { color: var(--accent); }
+    .faq-chevron {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      transition: transform 0.3s;
+      color: var(--text-muted);
+    }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-a {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.35s ease;
+    }
+    .faq-item.open .faq-a {
+      max-height: 200px;
+      padding-bottom: 20px;
+    }
+    .faq-a p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+    }
+    footer .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .footer-left a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-left a:hover { color: var(--accent); }
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .footer-right a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .footer-right a:hover { color: var(--accent); }
+
+    /* ── ANIMATIONS ── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .fade-in.delay-1 { transition-delay: 0.1s; }
+    .fade-in.delay-2 { transition-delay: 0.2s; }
+    .fade-in.delay-3 { transition-delay: 0.3s; }
+    .fade-in.delay-4 { transition-delay: 0.4s; }
+    .fade-in.delay-5 { transition-delay: 0.5s; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      :root { --section-gap: 80px; }
+      .container { padding: 0 20px; }
+      .hero { padding-top: 110px; }
+      .hero-sub { font-size: 14px; }
+      .features-grid { grid-template-columns: 1fr; gap: 16px; }
+      .steps { grid-template-columns: 1fr; gap: 40px; }
+      .steps::before { display: none; }
+      .nav-links a:not(.nav-gh) { display: none; }
+      .screenshots-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .hero-screenshot { transform: none; }
+      .hero-screenshot:hover { transform: none; }
+      .install-block code { font-size: 12px; padding: 12px 14px; }
+      footer .container { flex-direction: column; gap: 16px; text-align: center; }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container">
+      <a href="#" class="nav-brand">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+          <rect x="4" y="6" width="7" height="20" rx="2" fill="#e8927c"/>
+          <rect x="13" y="6" width="7" height="14" rx="2" fill="#e8927c"/>
+          <rect x="22" y="6" width="7" height="8" rx="2" fill="#e8927c"/>
+        </svg>
+        <span>Claude Code Kanban</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/NikiforovAll/claude-task-viewer" class="nav-gh" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+      <div class="fade-in">
+        <div class="hero-badge">
+          <span class="dot"></span>
+          Open source &middot; MIT
+        </div>
+      </div>
+      <h1 class="fade-in delay-1">Watch Claude Code<br>work, <em>in real time</em></h1>
+      <p class="hero-sub fade-in delay-2">A live Kanban dashboard for observing tasks, agents, and teams. Zero config. Read-only. Just run one command.</p>
+      <div class="fade-in delay-3">
+        <div class="install-block">
+          <code><span class="prompt">$</span> npx claude-code-kanban --open</code>
+          <button class="install-copy" onclick="copyInstall(this)" title="Copy to clipboard">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="hero-screenshot fade-in delay-4">
+        <img src="assets/screenshot-light-v2.png" alt="Claude Code Kanban dashboard">
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="container">
+      <p class="section-label fade-in">Features</p>
+      <h2 class="section-title fade-in">Everything happening in Claude,<br>on one board</h2>
+      <div class="features-grid">
+        <div class="feature-card fade-in">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="5" height="14" rx="1"/><rect x="8" y="3" width="5" height="9" rx="1"/><rect x="15" y="3" width="5" height="5" rx="1"/></svg>
+          </div>
+          <h3>Real-time Kanban</h3>
+          <p>Tasks flow through Pending, In Progress, and Completed columns as Claude works. SSE-powered live updates with no polling.</p>
+        </div>
+        <div class="feature-card fade-in delay-1">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 3"/></svg>
+          </div>
+          <h3>Agent log</h3>
+          <p>Live subagent tracking with spawn time, duration, prompt preview, and idle detection. See every agent Claude orchestrates.</p>
+        </div>
+        <div class="feature-card fade-in delay-2">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2a8 8 0 100 16 8 8 0 000-16z"/><path d="M10 7v3"/><circle cx="10" cy="13" r="0.5" fill="currentColor"/></svg>
+          </div>
+          <h3>Waiting indicators</h3>
+          <p>Amber highlights on sessions that need your permission or input. Never miss a blocked Claude session again.</p>
+        </div>
+        <div class="feature-card fade-in delay-3">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="8" r="3"/><circle cx="13" cy="8" r="3"/><path d="M2 16c0-2.2 2.2-4 5-4s5 1.8 5 4"/><path d="M12 12c2.8 0 5 1.8 5 4"/></svg>
+          </div>
+          <h3>Agent teams</h3>
+          <p>Color-coded team members, owner filtering, and member count badges. Works with Claude Code's native team orchestration.</p>
+        </div>
+        <div class="feature-card fade-in delay-4">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h4"/><path d="M12 10h4"/><circle cx="10" cy="10" r="2"/><path d="M4 5l4 5-4 5"/><path d="M16 5l-4 5 4 5"/></svg>
+          </div>
+          <h3>Task dependencies</h3>
+          <p>See blockedBy/blocks relationships and the critical path. Understand which tasks are gating progress at a glance.</p>
+        </div>
+        <div class="feature-card fade-in delay-5">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 7h1"/><path d="M12 7h1"/><path d="M7 11h6"/></svg>
+          </div>
+          <h3>Keyboard-first</h3>
+          <p>Full keyboard navigation. Press <code>?</code> for shortcuts, <code>Shift+M</code> for live message follow, <code>Shift+L</code> for session log.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <p class="section-label fade-in">Setup</p>
+      <h2 class="section-title fade-in">Three commands. Full observability.</h2>
+      <div class="steps">
+        <div class="step fade-in">
+          <div class="step-num">1</div>
+          <h3>Install hooks</h3>
+          <p>One-time setup that adds lightweight shell hooks to Claude Code for full observability.</p>
+          <div class="step-code">npx claude-code-kanban --install</div>
+        </div>
+        <div class="step fade-in delay-2">
+          <div class="step-num">2</div>
+          <h3>Start dashboard</h3>
+          <p>Launch the Kanban viewer. Opens in your browser, connects via SSE for live updates.</p>
+          <div class="step-code">npx claude-code-kanban --open</div>
+        </div>
+        <div class="step fade-in delay-4">
+          <div class="step-num">3</div>
+          <h3>Use Claude Code</h3>
+          <p>Work as usual. Tasks, agents, and messages appear on the board automatically.</p>
+          <div class="step-code">claude</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="screenshots" id="screenshots">
+    <div class="container">
+      <div class="screenshots-header">
+        <div>
+          <p class="section-label fade-in">Preview</p>
+          <h2 class="section-title fade-in" style="margin-bottom:0">See it in action</h2>
+        </div>
+        <div class="theme-toggle fade-in">
+          <button class="active" onclick="showScreenshot('dark', this)">Dark</button>
+          <button onclick="showScreenshot('light', this)">Light</button>
+        </div>
+      </div>
+      <div class="screenshot-frame fade-in">
+        <img id="ss-dark" src="assets/screenshot-dark-v2.png" alt="Dark mode screenshot">
+        <img id="ss-light" src="assets/screenshot-light-v2.png" alt="Light mode screenshot" class="hidden">
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq" id="faq">
+    <div class="container">
+      <p class="section-label fade-in">FAQ</p>
+      <h2 class="section-title fade-in">Common questions</h2>
+      <div class="faq-list">
+        <div class="faq-item fade-in">
+          <button class="faq-q" onclick="toggleFaq(this)">
+            Does this control Claude?
+            <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8l5 5 5-5"/></svg>
+          </button>
+          <div class="faq-a"><p>No. The viewer only observes — it never writes to task files or directs Claude's work. It's completely read-only.</p></div>
+        </div>
+        <div class="faq-item fade-in delay-1">
+          <button class="faq-q" onclick="toggleFaq(this)">
+            Does it work with agent teams?
+            <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8l5 5 5-5"/></svg>
+          </button>
+          <div class="faq-a"><p>Yes. Team sessions are auto-detected with color-coded members and owner filtering.</p></div>
+        </div>
+        <div class="faq-item fade-in delay-2">
+          <button class="faq-q" onclick="toggleFaq(this)">
+            Does it require Claude Code to be running?
+            <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8l5 5 5-5"/></svg>
+          </button>
+          <div class="faq-a"><p>No. You can browse past sessions anytime. Live updates resume when Claude starts working again.</p></div>
+        </div>
+        <div class="faq-item fade-in delay-3">
+          <button class="faq-q" onclick="toggleFaq(this)">
+            What happens without hooks?
+            <svg class="faq-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8l5 5 5-5"/></svg>
+          </button>
+          <div class="faq-a"><p>The Kanban board still shows tasks, but you won't see the agent log, waiting-for-user indicators, or live session activity. Run <code>npx claude-code-kanban --install</code> for the full experience.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-left">
+        <span>MIT License</span>
+        <a href="https://www.npmjs.com/package/claude-code-kanban" target="_blank" rel="noopener">npm</a>
+        <a href="https://github.com/NikiforovAll/claude-task-viewer" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/NikiforovAll" target="_blank" rel="noopener">Built by NikiforovAll</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Nav scroll effect
+    const nav = document.querySelector('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 10);
+    }, { passive: true });
+
+    // Intersection Observer for fade-in
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+    // Copy install command
+    function copyInstall(btn) {
+      navigator.clipboard.writeText('npx claude-code-kanban --open').then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8.5l3 3 7-7"/></svg>';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>';
+        }, 2000);
+      });
+    }
+
+    // Screenshot toggle
+    function showScreenshot(theme, btn) {
+      document.getElementById('ss-dark').classList.toggle('hidden', theme !== 'dark');
+      document.getElementById('ss-light').classList.toggle('hidden', theme !== 'light');
+      btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    // FAQ accordion
+    function toggleFaq(btn) {
+      const item = btn.parentElement;
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    }
+  </script>
+
+</body>
+</html>

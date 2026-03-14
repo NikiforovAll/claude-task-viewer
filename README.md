@@ -4,7 +4,9 @@
 [![license](https://img.shields.io/npm/l/claude-code-kanban)](LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/claude-code-kanban)](https://www.npmjs.com/package/claude-code-kanban)
 
-> Watch Claude Code think, in real time.
+**[Live Demo & Docs](https://nikiforovall.blog/claude-code-kanban/)**
+
+> Watch Claude Code work, in real time.
 
 ![Dark mode](assets/screenshot-dark-v2.png)
 
