@@ -11,6 +11,8 @@ const HOOKS_DIR = path.join(CLAUDE_DIR, 'hooks');
 const SETTINGS_PATH = path.join(CLAUDE_DIR, 'settings.json');
 const HOOK_SCRIPT_DEST = path.join(HOOKS_DIR, 'agent-spy.sh');
 const HOOK_SCRIPT_SRC = path.join(__dirname, 'hooks', 'agent-spy.sh');
+const CTX_SCRIPT_DEST = path.join(HOOKS_DIR, 'context-status.sh');
+const CTX_SCRIPT_SRC = path.join(__dirname, 'hooks', 'context-status.sh');
 const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
 
 const HOOK_COMMAND = '~/.claude/hooks/agent-spy.sh';
@@ -52,36 +54,42 @@ async function runInstall() {
     console.log(yellow('⚠ not found — hook script requires jq for JSON parsing'));
   }
 
-  // 2. Hook script
-  console.log(`\n  Hook script: ${dim(HOOK_SCRIPT_DEST)}`);
-  let hookInstalled = false;
-  if (fs.existsSync(HOOK_SCRIPT_DEST)) {
-    const existing = fs.readFileSync(HOOK_SCRIPT_DEST, 'utf8');
-    const bundled = fs.readFileSync(HOOK_SCRIPT_SRC, 'utf8');
-    if (existing === bundled) {
-      console.log(`    ${green('✓')} Up to date`);
-      hookInstalled = true;
-    } else {
+  async function installScript(label, src, dest) {
+    console.log(`\n  ${label}: ${dim(dest)}`);
+    if (fs.existsSync(dest)) {
+      const existing = fs.readFileSync(dest, 'utf8');
+      const bundled = fs.readFileSync(src, 'utf8');
+      if (existing === bundled) {
+        console.log(`    ${green('✓')} Up to date`);
+        return true;
+      }
       if (await prompt(`    Different version found. Update? [Y/n] `)) {
         fs.mkdirSync(HOOKS_DIR, { recursive: true });
-        fs.copyFileSync(HOOK_SCRIPT_SRC, HOOK_SCRIPT_DEST);
-        try { fs.chmodSync(HOOK_SCRIPT_DEST, 0o755); } catch {}
+        fs.copyFileSync(src, dest);
+        try { fs.chmodSync(dest, 0o755); } catch {}
         console.log(`    ${green('✓')} Updated`);
-        hookInstalled = true;
-      } else {
-        console.log(`    ${dim('Skipped')}`);
+        return true;
       }
+      console.log(`    ${dim('Skipped')}`);
+      return false;
     }
-  } else {
     if (await prompt(`    Not found. Install? [Y/n] `)) {
       fs.mkdirSync(HOOKS_DIR, { recursive: true });
-      fs.copyFileSync(HOOK_SCRIPT_SRC, HOOK_SCRIPT_DEST);
-      try { fs.chmodSync(HOOK_SCRIPT_DEST, 0o755); } catch {}
+      fs.copyFileSync(src, dest);
+      try { fs.chmodSync(dest, 0o755); } catch {}
       console.log(`    ${green('✓')} Installed and set executable`);
-      hookInstalled = true;
-    } else {
-      console.log(`    ${dim('Skipped')}`);
+      return true;
     }
+    console.log(`    ${dim('Skipped')}`);
+    return false;
+  }
+
+  // 2. Hook scripts
+  const hookInstalled = await installScript('Hook script', HOOK_SCRIPT_SRC, HOOK_SCRIPT_DEST);
+  const ctxInstalled = await installScript('Context spy', CTX_SCRIPT_SRC, CTX_SCRIPT_DEST);
+  if (ctxInstalled) {
+    console.log(`\n    ${yellow('To enable context tracking, pipe it before your statusline:')}`);
+    console.log(`    ${dim('"statusLine": { "command": "~/.claude/hooks/context-status.sh | <your-statusline>" }')}`);
   }
 
   // 3. Settings.json
@@ -178,12 +186,18 @@ async function runUninstall() {
     console.log(`  Settings: ${dim('No settings.json found')}`);
   }
 
-  // 2. Remove hook script
+  // 2. Remove hook scripts
   if (fs.existsSync(HOOK_SCRIPT_DEST)) {
     fs.unlinkSync(HOOK_SCRIPT_DEST);
     console.log(`  Hook script: ${green('✓')} Removed`);
   } else {
     console.log(`  Hook script: ${dim('Not found')}`);
+  }
+  if (fs.existsSync(CTX_SCRIPT_DEST)) {
+    fs.unlinkSync(CTX_SCRIPT_DEST);
+    console.log(`  Context spy: ${green('✓')} Removed`);
+  } else {
+    console.log(`  Context spy: ${dim('Not found')}`);
   }
 
   // 3. Optionally remove agent-activity data

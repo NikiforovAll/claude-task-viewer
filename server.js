@@ -51,6 +51,7 @@ const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 const TEAMS_DIR = path.join(CLAUDE_DIR, 'teams');
 const PLANS_DIR = path.join(CLAUDE_DIR, 'plans');
 const AGENT_ACTIVITY_DIR = path.join(CLAUDE_DIR, 'agent-activity');
+const CONTEXT_STATUS_DIR = path.join(CLAUDE_DIR, 'context-status');
 
 const PERMISSION_TTL_MS = 1800000;
 const AGENT_TTL_MS = 3600000;
@@ -171,6 +172,7 @@ const MAX_CACHE_ENTRIES = 200;
 const progressMapCache = new Map();
 const compactSummaryCache = new Map();
 const taskCountsCache = new Map();
+const contextStatusCache = new Map();
 
 function evictStaleCache(cache) {
   if (cache.size <= MAX_CACHE_ENTRIES) return;
@@ -387,6 +389,9 @@ app.get('/api/sessions', async (req, res) => {
     const limitParam = req.query.limit || '20';
     const limit = limitParam === 'all' ? null : parseInt(limitParam, 10);
 
+    const pinnedParam = req.query.pinned;
+    const pinnedIds = pinnedParam ? new Set(pinnedParam.split(',').filter(Boolean)) : new Set();
+
     const metadata = loadSessionMetadata();
     const sessionsMap = new Map();
 
@@ -450,6 +455,7 @@ app.get('/api/sessions', async (req, res) => {
             jsonlPath: meta.jsonlPath || null,
             tasksDir: sessionPath,
             projectDir: meta.jsonlPath ? path.dirname(meta.jsonlPath) : null,
+            contextStatus: (logAge <= AGENT_STALE_MS || agentStatus.hasActive || inProgress > 0 || pinnedIds.has(entry.name)) ? (contextStatusCache.get(entry.name) || null) : null,
             ...planInfo
           });
         }
@@ -495,6 +501,7 @@ app.get('/api/sessions', async (req, res) => {
           jsonlPath: meta.jsonlPath || null,
           tasksDir: null,
           projectDir: meta.jsonlPath ? path.dirname(meta.jsonlPath) : null,
+          contextStatus: (logAge <= AGENT_STALE_MS || metaAgentStatus.hasActive || pinnedIds.has(sessionId)) ? (contextStatusCache.get(sessionId) || null) : null,
           ...planInfo
         });
       }
@@ -572,9 +579,15 @@ app.get('/api/sessions', async (req, res) => {
       }
     }
 
+    // Backfill contextStatus for already-built sessions that are pinned
+    for (const pid of pinnedIds) {
+      const s = sessionsMap.get(pid);
+      if (s && !s.contextStatus) {
+        s.contextStatus = contextStatusCache.get(pid) || null;
+      }
+    }
+
     // Ensure pinned sessions are in the map even if they weren't discovered
-    const pinnedParam = req.query.pinned;
-    const pinnedIds = pinnedParam ? new Set(pinnedParam.split(',').filter(Boolean)) : new Set();
     for (const pid of pinnedIds) {
       if (sessionsMap.has(pid)) continue;
       const meta = metadata[pid];
@@ -604,6 +617,7 @@ app.get('/api/sessions', async (req, res) => {
         jsonlPath: meta.jsonlPath || null,
         tasksDir: null,
         projectDir: meta.jsonlPath ? path.dirname(meta.jsonlPath) : null,
+        contextStatus: contextStatusCache.get(pid) || null,
         ...getPlanInfo(meta.slug)
       });
     }
@@ -1052,6 +1066,10 @@ function broadcast(data) {
   }
 }
 
+app.get('/api/context-status', (req, res) => {
+  res.json(Object.fromEntries(contextStatusCache));
+});
+
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
@@ -1181,6 +1199,48 @@ agentActivityWatcher.on('all', (event, filePath) => {
   }
 });
 
+// Watch context-status directory for statusline updates
+const contextStatusWatcher = chokidar.watch(CONTEXT_STATUS_DIR, {
+  persistent: true,
+  ignoreInitial: false,
+  depth: 0
+});
+
+contextStatusWatcher.on('all', (event, filePath) => {
+  if (!filePath.endsWith('.json')) return;
+  const sessionId = path.basename(filePath, '.json');
+  if (event === 'add' || event === 'change') {
+    try {
+      const data = JSON.parse(readFileSync(filePath, 'utf8'));
+      contextStatusCache.set(sessionId, data);
+      evictStaleCache(contextStatusCache);
+    } catch (e) { /* ignore malformed */ }
+    broadcast({ type: 'context-update', sessionId });
+  } else if (event === 'unlink') {
+    contextStatusCache.delete(sessionId);
+    broadcast({ type: 'context-update', sessionId });
+  }
+});
+
+const CTX_CLEANUP_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+async function cleanupContextStatus() {
+  try {
+    const entries = await fs.readdir(CONTEXT_STATUS_DIR);
+    const now = Date.now();
+    for (const f of entries) {
+      if (!f.endsWith('.json')) continue;
+      try {
+        const fp = path.join(CONTEXT_STATUS_DIR, f);
+        const st = statSync(fp);
+        if (now - st.mtimeMs > CTX_CLEANUP_MAX_AGE_MS) {
+          await fs.unlink(fp);
+          contextStatusCache.delete(path.basename(f, '.json'));
+        }
+      } catch (e) { /* ignore */ }
+    }
+  } catch (e) { /* dir may not exist */ }
+}
+
 // Cleanup agent-activity folders older than 2 days
 const CLEANUP_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -1205,7 +1265,9 @@ async function cleanupAgentActivity() {
 }
 
 cleanupAgentActivity();
+cleanupContextStatus();
 setInterval(cleanupAgentActivity, CLEANUP_INTERVAL_MS);
+setInterval(cleanupContextStatus, 30 * 60 * 1000);
 
 const server = app.listen(PORT, () => {
     const actualPort = server.address().port;

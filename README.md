@@ -87,6 +87,38 @@ Claude Code writes task files to `~/.claude/tasks/` and conversation logs to `~/
 | `TeammateIdle` | Idle detection for team member agents |
 | `PostToolUse` | Waiting-for-user detection (permission prompts, AskUserQuestion) |
 
+## Context Window Monitoring
+
+Track real-time context window usage for each Claude Code session directly in the dashboard sidebar and detail panel.
+
+### Setup
+
+The installer copies `context-status.sh` alongside the agent hooks:
+
+```bash
+npx claude-code-kanban --install
+```
+
+Then add it to your statusline in `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/hooks/context-status.sh | npx -y ccstatusline@latest",
+    "padding": 0
+  }
+}
+```
+
+The script pipes through — your existing statusline still works. It just writes a snapshot to `~/.claude/context-status/{sessionId}.json` on each update.
+
+### What you get
+
+- **Sidebar bar** — compact context usage bar per session with color thresholds (green → yellow → orange → red) and a 200K token marker
+- **Detail panel** — input/output token breakdown, cache read tokens, cost, duration, API time, lines added/removed, and model name
+- Only shown for active or pinned sessions
+
 ## FAQ
 
 **Does this control Claude?**

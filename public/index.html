@@ -573,6 +573,117 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .context-bar { display: none; margin-top: 6px; }
+    .has-context .context-bar { display: block; }
+    .context-bar-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .context-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease, background 0.3s;
+    }
+    .context-bar-marker-200k {
+      position: absolute;
+      top: -1px;
+      bottom: -1px;
+      width: 2px;
+      background: var(--text-muted);
+      opacity: 0.7;
+      z-index: 2;
+      border-radius: 1px;
+    }
+    .context-bar-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 2px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-tertiary);
+    }
+
+    .detail-context { margin-bottom: 16px; }
+    .detail-context-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-tertiary);
+      margin-bottom: 8px;
+    }
+    .detail-token-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      font-size: 11px;
+    }
+    .detail-token-row .token-label {
+      width: 50px;
+      color: var(--text-tertiary);
+      font-size: 10px;
+    }
+    .detail-token-row .token-bar {
+      flex: 1;
+      height: 8px;
+      background: var(--border);
+      border-radius: 2px;
+      position: relative;
+    }
+    .detail-token-row .token-bar-marker-200k {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      background: var(--text-muted);
+      opacity: 0.7;
+      z-index: 2;
+      border-radius: 1px;
+    }
+    .detail-token-row .token-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+    .detail-token-row .token-value {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      width: 42px;
+      text-align: right;
+      color: var(--text-tertiary);
+    }
+    .detail-context-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 16px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+    .detail-context-stats .stat-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .detail-context-stats .stat-label { color: var(--text-tertiary); }
+    .detail-context-stats .stat-value { color: var(--text-secondary); }
+    .detail-context-summary {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-secondary);
+    }
+
     .session-time {
       font-size: 11px;
       font-weight: 450;
@@ -3738,6 +3849,7 @@
     }
 
     function formatDuration(ms) {
+      if (!ms) return '0s';
       const s = Math.floor(ms / 1000);
       if (s < 60) return `${s}s`;
       const m = Math.floor(s / 60);
@@ -4085,8 +4197,9 @@
         const memberCount = session.memberCount || 0;
 
         const isSessionPinned = pinnedSessionIds.has(session.id);
+        const showCtx = session.contextStatus && (sessionFilter === 'active' || isSessionPinned);
         return `
-          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''} ${!session.hasRecentLog && !session.inProgress && !session.hasWaitingForUser ? 'stale' : ''}" title="${tooltip}">
+          <button onclick="fetchTasks('${session.id}')" data-session-id="${session.id}" class="session-item ${isActive ? 'active' : ''} ${session.hasWaitingForUser ? 'permission-pending' : ''} ${!session.hasRecentLog && !session.inProgress && !session.hasWaitingForUser ? 'stale' : ''} ${showCtx ? 'has-context' : ''}" title="${tooltip}">
             <span class="session-pin-btn${isSessionPinned ? ' pinned' : ''}" onclick="event.stopPropagation();toggleSessionPin('${escapeHtml(session.id)}')" title="${isSessionPinned ? 'Unpin' : 'Pin'} session">${SESSION_PIN_SVG}</span>
             <div class="session-name">${escapeHtml(primaryName)}</div>
             ${secondaryName ? `<div class="session-secondary">${escapeHtml(secondaryName)}</div>` : ''}
@@ -4095,7 +4208,7 @@
             <div class="session-progress">
               <span class="session-indicators">
                 ${isTeam ? `<span class="team-badge" title="${memberCount} team members"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${memberCount}</span>` : ''}
-                ${(isTeam || session.project) ? `<span class="team-info-btn" onclick="event.stopPropagation(); showSessionInfoModal('${session.id}')" title="View session info">ℹ</span>` : ''}
+                ${(isTeam || session.project || showCtx) ? `<span class="team-info-btn" onclick="event.stopPropagation(); showSessionInfoModal('${session.id}')" title="View session info">ℹ</span>` : ''}
                 ${session.hasPlan ? `<span class="plan-indicator" onclick="event.stopPropagation(); openPlanForSession('${session.id}')" title="View plan"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>` : ''}
                 ${session.hasRunningAgents ? '<span class="agent-badge" title="Active agents">🤖</span>' : ''}
                 ${session.planSourceSessionId ? `<span class="plan-indicator" title="Implements plan — click to view plan session" onclick="event.stopPropagation(); fetchTasks('${escapeHtml(session.planSourceSessionId)}')">📋</span>` : ''}
@@ -4105,6 +4218,7 @@
               <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
               <span class="progress-text">${session.completed}/${total}</span>
             </div>
+            ${showCtx ? renderContextBar(session.contextStatus) : ''}
             <div class="session-time">${formatDate(session.modifiedAt)}</div>
           </button>
         `;
@@ -5302,6 +5416,10 @@
             }
           }
 
+          if (data.type === 'context-update') {
+            debouncedRefresh(data.sessionId, true);
+          }
+
           if (data.type === 'team-update') {
             console.log('[SSE] Team update:', data.teamName);
             debouncedRefresh(data.teamName, false);
@@ -5315,6 +5433,105 @@
       }, 30000);
 
       connect();
+    }
+
+
+    const CTX_MARKER_TOKENS = 200000;
+
+    function getContextColor(pct) {
+      if (pct < 50) return '#5b9a6b';
+      if (pct < 70) return '#b8a63e';
+      if (pct < 85) return '#c07840';
+      return '#b85555';
+    }
+
+    function formatTokens(k) {
+      if (k >= 1000) return (k / 1000).toFixed(1) + 'M';
+      if (k < 1) return (k * 1000).toFixed(0);
+      return Math.round(k) + 'K';
+    }
+
+    function getCtx(raw) {
+      if (!raw) return null;
+      const cw = raw.context_window || {};
+      const size = cw.context_window_size || 0;
+      return {
+        pct: cw.used_percentage || 0,
+        remaining: cw.remaining_percentage || (100 - (cw.used_percentage || 0)),
+        size,
+        inputTokens: cw.total_input_tokens || 0,
+        outputTokens: cw.total_output_tokens || 0,
+        marker200kPct: size > 0 ? (CTX_MARKER_TOKENS / size) * 100 : 0,
+      };
+    }
+
+    function renderContextBar(raw) {
+      const ctx = getCtx(raw);
+      if (!ctx) return '';
+      const color = getContextColor(ctx.pct);
+      return `
+        <div class="context-bar" style="display:block">
+          <div class="context-bar-track">
+            <div class="context-bar-fill" style="width:${ctx.pct}%;background:${color}"></div>
+            ${ctx.marker200kPct > 0 && ctx.marker200kPct < 100 ? `<div class="context-bar-marker-200k" style="left:${ctx.marker200kPct}%" title="200K tokens"></div>` : ''}
+          </div>
+          <div class="context-bar-labels">
+            <span style="color:${color}">${Math.round(ctx.pct)}%</span>
+            <span>${Math.round(ctx.remaining)}% free</span>
+          </div>
+        </div>`;
+    }
+
+    function formatCost(usd) {
+      if (!usd) return '$0.00';
+      return '$' + usd.toFixed(2);
+    }
+
+    function renderContextDetail(raw) {
+      const ctx = getCtx(raw);
+      if (!ctx) return '';
+      const inputK = ctx.inputTokens / 1000;
+      const outputK = ctx.outputTokens / 1000;
+      const totalK = ctx.size / 1000;
+      const inputPct = totalK > 0 ? (inputK / totalK) * 100 : 0;
+      const outputPct = totalK > 0 ? (outputK / totalK) * 100 : 0;
+      const color = getContextColor(ctx.pct);
+      const marker200k = ctx.marker200kPct > 0 && ctx.marker200kPct < 100
+        ? `<div class="token-bar-marker-200k" style="left:${ctx.marker200kPct}%" title="200K"></div>` : '';
+
+      const cw = raw.context_window || {};
+      const usage = cw.current_usage || {};
+      const cost = raw.cost || {};
+      const cacheRead = usage.cache_read_input_tokens || 0;
+      const model = raw.model || {};
+      const modelName = model.display_name || model.id || '';
+
+      return `
+        <div class="detail-context">
+          <div class="detail-context-title">${modelName ? escapeHtml(modelName) : 'Context Window'}</div>
+          <div class="detail-token-row">
+            <span class="token-label">Input</span>
+            <div class="token-bar"><div class="token-fill" style="width:${inputPct}%;background:var(--accent)"></div>${marker200k}</div>
+            <span class="token-value">${formatTokens(inputK)}</span>
+          </div>
+          <div class="detail-token-row">
+            <span class="token-label">Output</span>
+            <div class="token-bar"><div class="token-fill" style="width:${outputPct}%;background:#fb923c"></div>${marker200k}</div>
+            <span class="token-value">${formatTokens(outputK)}</span>
+          </div>
+          <div class="detail-context-summary">
+            <span style="color:${color}">${Math.round(ctx.pct)}% used</span>
+            <span>${formatTokens((ctx.pct / 100) * totalK)} / ${formatTokens(totalK)}</span>
+          </div>
+          <div class="detail-context-stats">
+            <div class="stat-item"><span class="stat-label">Cache read</span><span class="stat-value">${formatTokens(cacheRead / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Cost</span><span class="stat-value">${formatCost(cost.total_cost_usd)}</span></div>
+            <div class="stat-item"><span class="stat-label">Duration</span><span class="stat-value">${formatDuration(cost.total_duration_ms)}</span></div>
+            <div class="stat-item"><span class="stat-label">API time</span><span class="stat-value">${formatDuration(cost.total_api_duration_ms)}</span></div>
+            <div class="stat-item"><span class="stat-label">Lines added</span><span class="stat-value">+${(cost.total_lines_added || 0).toLocaleString()}</span></div>
+            <div class="stat-item"><span class="stat-label">Lines removed</span><span class="stat-value">-${(cost.total_lines_removed || 0).toLocaleString()}</span></div>
+          </div>
+        </div>`;
     }
 
     function formatDate(dateStr) {
@@ -5747,6 +5964,11 @@
         html += `<button onclick="navigator.clipboard.writeText('${copyVal.replace(/'/g, "\\'")}'); this.textContent='✓'; setTimeout(() => this.textContent='Copy', 1000)" style="padding: 2px 8px; font-size: 11px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Copy</button>`;
       });
       html += `</div>`;
+
+      if (session.contextStatus) {
+        html += `<hr style="border: none; border-top: 1px solid var(--border); margin: 12px 0;">`;
+        html += renderContextDetail(session.contextStatus);
+      }
 
       if (planContent) {
         _pendingPlanContent = planContent;
