@@ -2268,6 +2268,12 @@
       color: var(--text-primary);
     }
 
+    .project-group-header.kb-selected {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+      border-radius: 4px;
+    }
+
     .project-group-header .group-chevron {
       transition: transform 0.15s ease;
       flex-shrink: 0;
@@ -4101,29 +4107,34 @@
         sessionsList.innerHTML = filteredSessions.map(renderSessionCard).join('');
       }
 
-      const items = getSessionItems();
-      const activeIdx = items.findIndex(el => el.classList.contains('active'));
+      const navItems = getNavigableItems();
+      const allSessions = getSessionItems();
+      const activeIdx = allSessions.findIndex(el => el.classList.contains('active'));
       if (activeIdx >= 0 && (selectedSessionIdx < 0 || sessionJustSelected)) {
-        selectedSessionIdx = activeIdx;
-        selectedSessionKbId = items[activeIdx].dataset.sessionId || null;
+        const navIdx = navItems.indexOf(allSessions[activeIdx]);
+        selectedSessionIdx = navIdx >= 0 ? navIdx : 0;
+        selectedSessionKbId = allSessions[activeIdx].dataset.sessionId || null;
         sessionJustSelected = false;
       }
 
       if (selectedSessionKbId && focusZone === 'sidebar') {
-        const restoredIdx = items.findIndex(el => el.dataset.sessionId === selectedSessionKbId);
+        const restoredIdx = navItems.findIndex(el =>
+          getKbId(el) === selectedSessionKbId
+        );
         if (restoredIdx >= 0) {
           selectedSessionIdx = restoredIdx;
-          items[restoredIdx].classList.add('kb-selected');
+          navItems[restoredIdx].classList.add('kb-selected');
         } else {
           selectedSessionIdx = -1;
           selectedSessionKbId = null;
         }
       } else if (focusZone === 'sidebar' && selectedSessionIdx >= 0) {
-        if (items.length > 0) {
-          const clamped = Math.min(selectedSessionIdx, items.length - 1);
+        if (navItems.length > 0) {
+          const clamped = Math.min(selectedSessionIdx, navItems.length - 1);
           selectedSessionIdx = clamped;
-          selectedSessionKbId = items[clamped].dataset.sessionId || null;
-          items[clamped].classList.add('kb-selected');
+          const el = navItems[clamped];
+          selectedSessionKbId = getKbId(el);
+          el.classList.add('kb-selected');
         } else {
           selectedSessionIdx = -1;
           selectedSessionKbId = null;
@@ -4357,31 +4368,71 @@
       }
     }
 
+    function getKbId(el) {
+      return el.dataset.sessionId || el.dataset.groupPath || null;
+    }
+
+    function getGroupSessionsContainer(header) {
+      let el = header.nextElementSibling;
+      while (el && !el.classList.contains('project-group-sessions')) el = el.nextElementSibling;
+      return el;
+    }
+
+    function getNavigableItems() {
+      const items = [];
+      for (const el of sessionsList.children) {
+        if (el.classList.contains('project-group-header')) {
+          items.push(el);
+          if (!collapsedProjectGroups.has(el.dataset.groupPath)) {
+            const container = getGroupSessionsContainer(el);
+            if (container) {
+              for (const s of container.querySelectorAll('.session-item')) items.push(s);
+            }
+          }
+        } else if (el.classList.contains('session-item')) {
+          items.push(el);
+        }
+      }
+      return items;
+    }
+
     function getSessionItems() {
       return Array.from(sessionsList.querySelectorAll('.session-item'));
     }
 
-    function selectSessionByIndex(idx) {
-      const items = getSessionItems();
-      if (items.length === 0) return;
-      const prev = sessionsList.querySelector('.session-item.kb-selected');
+    function clearKbSelection() {
+      const prev = sessionsList.querySelector('.kb-selected');
       if (prev) prev.classList.remove('kb-selected');
-      selectedSessionIdx = Math.max(0, Math.min(idx, items.length - 1));
-      selectedSessionKbId = items[selectedSessionIdx].dataset.sessionId || null;
-      items[selectedSessionIdx].classList.add('kb-selected');
-      items[selectedSessionIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
-    function navigateSession(direction) {
-      const items = getSessionItems();
+    function selectSessionByIndex(idx, items) {
+      items = items || getNavigableItems();
+      if (items.length === 0) return;
+      clearKbSelection();
+      selectedSessionIdx = Math.max(0, Math.min(idx, items.length - 1));
+      const el = items[selectedSessionIdx];
+      selectedSessionKbId = getKbId(el);
+      el.classList.add('kb-selected');
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function navigateSession(direction, items) {
+      items = items || getNavigableItems();
       if (items.length === 0) return;
       if (selectedSessionIdx < 0) {
-        selectSessionByIndex(0);
+        selectSessionByIndex(0, items);
         return;
       }
-      const newIdx = selectedSessionIdx + direction;
+      const currentEl = items[selectedSessionIdx];
+      let newIdx = selectedSessionIdx + direction;
+      if (!currentEl || !currentEl.isConnected) {
+        const restoredIdx = selectedSessionKbId
+          ? items.findIndex(el => getKbId(el) === selectedSessionKbId)
+          : -1;
+        newIdx = restoredIdx >= 0 ? restoredIdx : 0;
+      }
       if (newIdx >= 0 && newIdx < items.length) {
-        selectSessionByIndex(newIdx);
+        selectSessionByIndex(newIdx, items);
       }
     }
 
@@ -4392,26 +4443,56 @@
       if (collapsed) collapsedProjectGroups.add(projectPath);
       else collapsedProjectGroups.delete(projectPath);
       header.classList.toggle('collapsed', collapsed);
-      let el = header.nextElementSibling;
-      while (el && !el.classList.contains('project-group-sessions')) el = el.nextElementSibling;
-      if (el) el.classList.toggle('collapsed', collapsed);
+      const container = getGroupSessionsContainer(header);
+      if (container) container.classList.toggle('collapsed', collapsed);
       try { localStorage.setItem('collapsedGroups', JSON.stringify([...collapsedProjectGroups])); } catch(_) {}
     }
 
-    function toggleSelectedSessionGroup(collapse) {
-      const items = getSessionItems();
+    function handleSidebarHorizontal(direction) {
+      const items = getNavigableItems();
       if (selectedSessionIdx < 0 || selectedSessionIdx >= items.length) return;
-      const container = items[selectedSessionIdx].closest('.project-group-sessions');
-      if (!container) return;
-      let header = container.previousElementSibling;
-      while (header && !header.classList.contains('project-group-header')) header = header.previousElementSibling;
-      setGroupCollapsed(header, collapse);
+      const el = items[selectedSessionIdx];
+      const isHeader = el.classList.contains('project-group-header');
+      const collapse = direction < 0;
+
+      if (isHeader) {
+        const groupPath = el.dataset.groupPath;
+        const isCollapsed = collapsedProjectGroups.has(groupPath);
+        if (collapse) {
+          if (!isCollapsed) setGroupCollapsed(el, true);
+        } else {
+          if (isCollapsed) {
+            setGroupCollapsed(el, false);
+          } else {
+            navigateSession(1);
+          }
+        }
+      } else {
+        if (collapse) {
+          const container = el.closest('.project-group-sessions');
+          if (container) {
+            let header = container.previousElementSibling;
+            while (header && !header.classList.contains('project-group-header')) header = header.previousElementSibling;
+            if (header) {
+              const headerIdx = items.indexOf(header);
+              if (headerIdx >= 0) selectSessionByIndex(headerIdx, items);
+            }
+          }
+        } else {
+          activateSelectedSession(items);
+        }
+      }
     }
 
-    function activateSelectedSession() {
-      const items = getSessionItems();
-      if (selectedSessionIdx >= 0 && selectedSessionIdx < items.length) {
-        items[selectedSessionIdx].click();
+    function activateSelectedSession(items) {
+      items = items || getNavigableItems();
+      if (selectedSessionIdx < 0 || selectedSessionIdx >= items.length) return;
+      const el = items[selectedSessionIdx];
+      if (el.classList.contains('project-group-header')) {
+        const groupPath = el.dataset.groupPath;
+        setGroupCollapsed(el, !collapsedProjectGroups.has(groupPath));
+      } else {
+        el.click();
       }
     }
 
@@ -4419,8 +4500,7 @@
       const sidebar = document.querySelector('.sidebar');
       // Clear all zone visuals
       sidebar.classList.remove('sidebar-focused');
-      const prevSession = sessionsList.querySelector('.session-item.kb-selected');
-      if (prevSession) prevSession.classList.remove('kb-selected');
+      clearKbSelection();
       const selCard = document.querySelector('.task-card.selected');
       if (selCard) selCard.classList.remove('selected');
 
@@ -4431,13 +4511,13 @@
           localStorage.setItem('sidebar-collapsed', false);
         }
         sidebar.classList.add('sidebar-focused');
-        const items = getSessionItems();
+        const items = getNavigableItems();
         if (items.length > 0) {
           const activeIdx = items.findIndex(el => el.classList.contains('active'));
           if (activeIdx >= 0) {
             selectSessionByIndex(activeIdx);
           } else if (selectedSessionKbId) {
-            const restoredIdx = items.findIndex(el => el.dataset.sessionId === selectedSessionKbId);
+            const restoredIdx = items.findIndex(el => getKbId(el) === selectedSessionKbId);
             selectSessionByIndex(restoredIdx >= 0 ? restoredIdx : 0);
           } else {
             selectSessionByIndex(0);
@@ -4914,6 +4994,10 @@
       // Tab toggles focus zone
       if (e.key === 'Tab') {
         e.preventDefault();
+        if (focusZone === 'sidebar') {
+          const hasCards = document.querySelector('.task-card');
+          if (!hasCards) return;
+        }
         setFocusZone(focusZone === 'board' ? 'sidebar' : 'board');
         return;
       }
@@ -4932,12 +5016,12 @@
         }
         if (e.key === 'h' || e.key === 'ArrowLeft') {
           e.preventDefault();
-          toggleSelectedSessionGroup(true);
+          handleSidebarHorizontal(-1);
           return;
         }
         if (e.key === 'l' || e.key === 'ArrowRight') {
           e.preventDefault();
-          toggleSelectedSessionGroup(false);
+          handleSidebarHorizontal(1);
           return;
         }
         if (e.key === 'Enter' || e.key === ' ') {
@@ -4951,14 +5035,14 @@
         }
         if (e.key === 'p' || e.key === 'P') {
           e.preventDefault();
-          const highlighted = sessionsList.querySelector('.session-item.kb-selected');
+          const highlighted = sessionsList.querySelector('.kb-selected');
           const sid = highlighted?.dataset.sessionId || currentSessionId;
           if (sid) openPlanForSession(sid);
           return;
         }
         if (e.key === 'i' || e.key === 'I') {
           e.preventDefault();
-          const highlighted = sessionsList.querySelector('.session-item.kb-selected');
+          const highlighted = sessionsList.querySelector('.kb-selected');
           const sid = highlighted?.dataset.sessionId || currentSessionId;
           if (sid) showSessionInfoModal(sid);
           return;
@@ -4974,6 +5058,10 @@
       const navKeys = ['j','k','h','l','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
       if (navKeys.includes(e.key)) {
         e.preventDefault();
+        if (!selectedTaskId && !document.querySelector('.task-card.selected')) {
+          setFocusZone('sidebar');
+          return;
+        }
         if (e.key === 'j' || e.key === 'ArrowDown') navigateVertical(1);
         else if (e.key === 'k' || e.key === 'ArrowUp') navigateVertical(-1);
         else if (e.key === 'h' || e.key === 'ArrowLeft') navigateHorizontal(-1);
