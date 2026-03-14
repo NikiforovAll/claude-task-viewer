@@ -1616,7 +1616,8 @@
       cursor: pointer; padding: 2px; opacity: 0.6; margin-left: auto; align-self: flex-start;
     }
     .pinned-item-unpin:hover { opacity: 1; color: var(--danger, #e55); }
-    .msg-pin-btn.pinned svg, #msg-detail-pin-btn.active svg { fill: var(--accent); stroke: var(--accent); }
+    .msg-pin-btn.pinned svg, #msg-detail-pin-btn.active svg, #agent-modal-pin-btn.active svg { fill: var(--accent); stroke: var(--accent); }
+    #msg-detail-pin-btn.active, #agent-modal-pin-btn.active { color: var(--accent); border-color: var(--accent); }
     .session-pin-btn {
       position: absolute; top: 6px; right: 6px; background: none; border: none;
       color: var(--text-muted); cursor: pointer; padding: 2px; opacity: 0;
@@ -2695,7 +2696,8 @@
     async function fetchSessions() {
       console.log('[fetchSessions] Starting...');
       try {
-        const res = await fetch(`/api/sessions?limit=${sessionLimit}`);
+        const pinnedParam = pinnedSessionIds.size > 0 ? `&pinned=${[...pinnedSessionIds].join(',')}` : '';
+        const res = await fetch(`/api/sessions?limit=${sessionLimit}${pinnedParam}`);
         const newSessions = await res.json();
         const tasksRes = await fetch('/api/tasks/all');
         const newTasks = await tasksRes.json();
@@ -3060,6 +3062,14 @@
         if (hash === lastMessagesHash) return;
         lastMessagesHash = hash;
         currentMessages = data.messages;
+        let agentEnriched = false;
+        for (const m of data.messages) {
+          if (m.agentId && m.agentPrompt) {
+            const agent = currentAgents.find(a => a.agentId === m.agentId);
+            if (agent && !agent.prompt) { agent.prompt = m.agentPrompt; agentEnriched = true; }
+          }
+        }
+        if (agentEnriched) renderAgentFooter();
         updateLatestMessage(data.messages);
         if (messagePanelOpen) renderMessages(data.messages);
         if (msgDetailFollowLatest && data.messages.length) {
@@ -3318,7 +3328,7 @@
         document.getElementById('msg-detail-title').textContent = pin.tool || 'Tool';
         const fullText = pin.fullDetail || pin.detail || '';
         const pinParamsHtml = renderToolParamsHtml(pin.params);
-        const pinResultHtml = renderToolResultHtml(pin.toolResult, pin.toolResultTruncated, pin.tool, pin.toolResultFull);
+        const pinResultHtml = renderToolResultHtml(pin.toolResult, pin.toolResultTruncated, pin.toolResultFull);
         const pinDetailEscaped = escapeHtml(fullText);
         const pinDetailRendered = pin.tool === 'Bash' ? highlightBash(pinDetailEscaped) : pinDetailEscaped;
         body.innerHTML = (fullText ? `<pre class="msg-detail-pre">${pinDetailRendered}</pre>` : '<em>No details</em>') + pinParamsHtml + pinResultHtml;
@@ -3331,13 +3341,7 @@
       }
       document.getElementById('msg-detail-meta').textContent = formatDate(pin.timestamp);
       const pinModal = document.getElementById('msg-detail-modal').querySelector('.modal');
-      const pinHasTable = body.querySelector('table') !== null;
-      const pinContentLen = body.textContent.length;
-      const pinHasPre = body.querySelector('pre') !== null;
-      const pinModalWidth = pinHasTable ? '1100px'
-        : (pinContentLen > 2000 || pinHasPre) ? '960px'
-        : '860px';
-      pinModal.style.maxWidth = pinModalWidth;
+      autoSizeModal(pinModal, body);
       const pinBtn = document.getElementById('msg-detail-pin-btn');
       if (pinBtn) pinBtn.classList.add('active');
       document.getElementById('msg-detail-modal').classList.add('visible');
@@ -3405,7 +3409,7 @@
           agentBtn.style.display = 'none';
         }
         const toolParamsHtml = renderToolParamsHtml(m.params);
-        const toolResultHtml = renderToolResultHtml(m.toolResult, m.toolResultTruncated, m.tool, m.toolResultFull);
+        const toolResultHtml = renderToolResultHtml(m.toolResult, m.toolResultTruncated, m.toolResultFull);
         const detailEscaped = escapeHtml(fullText);
         const detailRendered = m.tool === 'Bash' ? highlightBash(detailEscaped) : detailEscaped;
         body.innerHTML = (fullText ? descHtml + `<pre class="msg-detail-pre">${detailRendered}</pre>` : '<em>No details</em>') + toolParamsHtml + toolResultHtml + agentExtraHtml;
@@ -3420,13 +3424,7 @@
         }
       }
       const modal = document.getElementById('msg-detail-modal').querySelector('.modal');
-      const hasTable = body.querySelector('table') !== null;
-      const contentLen = body.textContent.length;
-      const hasPre = body.querySelector('pre') !== null;
-      const modalWidth = hasTable ? '1100px'
-        : (contentLen > 2000 || hasPre) ? '960px'
-        : '860px';
-      modal.style.maxWidth = modalWidth;
+      autoSizeModal(modal, body);
       modal.classList.toggle('live', msgDetailFollowLatest);
       const overlay = document.getElementById('msg-detail-modal');
       overlay.classList.toggle('live-overlay', msgDetailFollowLatest);
@@ -3503,13 +3501,12 @@
       if (params.content) {
         const contentTruncated = params.content.length > CONTENT_TRUNCATE_MAX;
         const truncContent = contentTruncated ? params.content.slice(0, CONTENT_TRUNCATE_MAX) + '\n... (truncated)' : params.content;
-        const writeMoreId = contentTruncated ? `write-more-${Date.now()}-${Math.random().toString(36).slice(2,8)}` : null;
-        const writeMoreBtn = writeMoreId
-          ? ` <button onclick="var f=document.getElementById('${writeMoreId}'),t=this.parentElement.nextElementSibling,expand=f.style.display==='none';f.style.display=expand?'block':'none';t.style.display=expand?'none':'block';this.textContent=expand?'Show less':'Show more'" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.75rem;text-decoration:underline">Show more</button>`
-          : '';
-        const fullBlock = writeMoreId
-          ? `<pre id="${writeMoreId}" class="msg-detail-pre" style="max-height:500px;overflow:auto;display:none">${escapeHtml(params.content)}</pre>`
-          : '';
+        let writeMoreBtn = '', fullBlock = '';
+        if (contentTruncated) {
+          const toggle = makeExpandToggle(escapeHtml(truncContent), escapeHtml(params.content), { fontSize: '0.75rem', maxHeight: '500px' });
+          writeMoreBtn = ` ${toggle.btn}`;
+          fullBlock = toggle.full;
+        }
         html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
           <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px">content${writeMoreBtn}</div>
           <pre class="msg-detail-pre" style="max-height:300px;overflow:auto">${escapeHtml(truncContent)}</pre>
@@ -3534,21 +3531,34 @@
         .replace(/((?:^|\s)(?:&amp;&amp;|\|\||[|;])(?:\s|$))/g, '<span style="color:#d4d4d4;font-weight:bold">$1</span>');
     }
 
-    function renderToolResultHtml(toolResult, isTruncated, toolName, fullResult) {
+    let _expandIdCounter = 0;
+    function makeExpandToggle(truncatedHtml, fullHtml, opts = {}) {
+      const id = `expand-${++_expandIdCounter}`;
+      const fontSize = opts.fontSize || '0.8rem';
+      const maxHeight = opts.maxHeight || '';
+      const btn = `<button onclick="var f=document.getElementById('${id}'),t=this.parentElement.nextElementSibling,expand=f.style.display==='none';f.style.display=expand?'block':'none';t.style.display=expand?'none':'block';this.textContent=expand?'Show less':'Show more'" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:${fontSize};text-decoration:underline">Show more</button>`;
+      const mhStyle = maxHeight ? `max-height:${maxHeight};` : '';
+      const full = `<pre id="${id}" class="msg-detail-pre" style="${mhStyle}overflow:auto;display:none">${fullHtml}</pre>`;
+      return { btn, full };
+    }
+
+    function autoSizeModal(modal, body) {
+      const hasTable = body.querySelector('table') !== null;
+      const hasPre = body.querySelector('pre') !== null;
+      modal.style.maxWidth = hasTable ? '1100px' : (body.textContent.length > 2000 || hasPre) ? '960px' : '860px';
+    }
+
+    function renderToolResultHtml(toolResult, isTruncated, fullResult) {
       if (!toolResult) return '';
       const stripped = stripLineNumbers(toolResult);
       const escaped = escapeHtml(stripped);
-      const showMoreId = isTruncated && fullResult ? `show-more-${Date.now()}-${Math.random().toString(36).slice(2,8)}` : null;
-      const truncLabel = isTruncated
-        ? showMoreId
-          ? `<button onclick="var f=document.getElementById('${showMoreId}'),t=this.parentElement.nextElementSibling,expand=f.style.display==='none';f.style.display=expand?'block':'none';t.style.display=expand?'none':'block';this.textContent=expand?'Show less':'Show more'" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.8rem;margin-left:6px;text-decoration:underline">Show more</button>`
-          : '<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px">(truncated)</span>'
-        : '';
-      let fullBlock = '';
-      if (showMoreId) {
-        const fullStripped = stripLineNumbers(fullResult);
-        const fullEscaped = escapeHtml(fullStripped);
-        fullBlock = `<pre id="${showMoreId}" class="msg-detail-pre" style="overflow:auto;display:none">${fullEscaped}</pre>`;
+      let truncLabel = '', fullBlock = '';
+      if (isTruncated && fullResult) {
+        const toggle = makeExpandToggle(escaped, escapeHtml(stripLineNumbers(fullResult)));
+        truncLabel = toggle.btn;
+        fullBlock = toggle.full;
+      } else if (isTruncated) {
+        truncLabel = '<span style="color:var(--text-muted);font-size:0.8rem;margin-left:6px">(truncated)</span>';
       }
       return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
         <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px">Output${truncLabel}</div>
@@ -3669,10 +3679,10 @@
           : a.status === 'idle'
           ? `idle · ${formatDuration(elapsed)}`
           : `active · ${formatDuration(elapsed)}`;
-        const msgTrimmed = stripAnsi(a.lastMessage?.trim() || '').replace(/[\r\n]+/g, ' ');
-        const msgTrunc = msgTrimmed.length > 60 ? msgTrimmed.substring(0, 60) + '…' : msgTrimmed;
-        const msgHtml = msgTrunc
-          ? `<div class="agent-message" title="${escapeHtml(msgTrimmed)}">${escapeHtml(msgTrunc)}</div>` : '';
+        const promptTrimmed = stripAnsi((a.prompt || '').trim()).replace(/[\r\n]+/g, ' ');
+        const promptTrunc = promptTrimmed.length > 60 ? promptTrimmed.substring(0, 60) + '…' : promptTrimmed;
+        const msgHtml = promptTrunc
+          ? `<div class="agent-message" title="${escapeHtml(promptTrimmed)}">${escapeHtml(promptTrunc)}</div>` : '';
         const agentPinned = isAgentPinned(a.agentId);
         const agentPinBtn = `<button class="msg-pin-btn${agentPinned ? ' pinned' : ''}" onclick="event.stopPropagation();toggleAgentPin('${a.agentId}')" title="${agentPinned ? 'Unpin' : 'Pin'} agent">${PIN_SVG}</button>`;
         return `<div class="agent-card" onclick="showAgentModal('${a.agentId}')">
@@ -3713,9 +3723,24 @@
       copyWithFeedback(parts.join('\n\n'), btn);
     }
 
+    let currentAgentModalId = null;
+
+    function updateAgentModalPinState() {
+      const btn = document.getElementById('agent-modal-pin-btn');
+      if (!btn || !currentAgentModalId) return;
+      btn.classList.toggle('active', isAgentPinned(currentAgentModalId));
+    }
+
+    function togglePinFromAgentModal() {
+      if (!currentAgentModalId) return;
+      toggleAgentPin(currentAgentModalId);
+      updateAgentModalPinState();
+    }
+
     function showAgentModal(agentId) {
       const agent = currentAgents.find(a => a.agentId === agentId);
       if (!agent) return;
+      currentAgentModalId = agentId;
       const modal = document.getElementById('agent-modal');
       const title = document.getElementById('agent-modal-title');
       const body = document.getElementById('agent-modal-body');
@@ -3753,6 +3778,7 @@
       html += renderAgentTabs(promptHtml, responseHtml, promptText, responseText);
 
       body.innerHTML = html;
+      updateAgentModalPinState();
       modal.classList.add('visible');
       const keyHandler = (e) => {
         if (e.key === 'Escape') {
@@ -3766,6 +3792,7 @@
 
     function closeAgentModal() {
       document.getElementById('agent-modal').classList.remove('visible');
+      currentAgentModalId = null;
     }
 
     async function showAllTasks() {
@@ -6005,6 +6032,9 @@
       <div class="modal-header">
         <h3 id="agent-modal-title" class="modal-title">Agent</h3>
         <div style="display:flex;align-items:center;gap:4px;">
+          <button id="agent-modal-pin-btn" class="icon-btn" aria-label="Pin agent" title="Pin agent" onclick="togglePinFromAgentModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          </button>
           <button class="icon-btn" id="agent-modal-copy-all" aria-label="Copy all" title="Copy prompt + response" onclick="copyAgentModalAll(this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>

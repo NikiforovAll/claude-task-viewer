@@ -164,6 +164,7 @@ const messageCache = new Map();
 const MESSAGE_CACHE_TTL = 5000;
 const MAX_CACHE_ENTRIES = 200;
 const progressMapCache = new Map();
+const compactSummaryCache = new Map();
 const taskCountsCache = new Map();
 
 function evictStaleCache(cache) {
@@ -566,13 +567,52 @@ app.get('/api/sessions', async (req, res) => {
       }
     }
 
+    // Ensure pinned sessions are in the map even if they weren't discovered
+    const pinnedParam = req.query.pinned;
+    const pinnedIds = pinnedParam ? new Set(pinnedParam.split(',').filter(Boolean)) : new Set();
+    for (const pid of pinnedIds) {
+      if (sessionsMap.has(pid)) continue;
+      const meta = metadata[pid];
+      if (!meta) continue;
+      const logStat = getSessionLogStat(meta);
+      const logMtime = logStat.mtime;
+      let modifiedAt = meta.created || null;
+      if (logMtime) {
+        const jsonlMtime = new Date(logMtime).toISOString();
+        if (!modifiedAt || jsonlMtime > modifiedAt) modifiedAt = jsonlMtime;
+      }
+      sessionsMap.set(pid, {
+        id: pid,
+        name: getSessionDisplayName(pid, meta),
+        slug: meta.slug || null,
+        project: meta.project || null,
+        description: meta.description || null,
+        gitBranch: meta.gitBranch || null,
+        customTitle: meta.customTitle || null,
+        taskCount: 0, completed: 0, inProgress: 0, pending: 0,
+        createdAt: meta.created || null,
+        modifiedAt: modifiedAt || new Date(0).toISOString(),
+        isTeam: false, memberCount: 0,
+        hasMessages: logStat.hasMessages,
+        hasActiveAgents: false, hasRunningAgents: false, hasWaitingForUser: false,
+        hasRecentLog: false,
+        jsonlPath: meta.jsonlPath || null,
+        tasksDir: null,
+        projectDir: meta.jsonlPath ? path.dirname(meta.jsonlPath) : null,
+        ...getPlanInfo(meta.slug)
+      });
+    }
+
     // Convert map to array and sort by most recently modified
-    let sessions = Array.from(sessionsMap.values());
+    sessions = Array.from(sessionsMap.values());
     sessions.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
 
-    // Apply limit if specified
+    // Apply limit if specified, but always include pinned sessions
     if (limit !== null && limit > 0) {
-      sessions = sessions.slice(0, limit);
+      const top = sessions.slice(0, limit);
+      const topIds = new Set(top.map(s => s.id));
+      const missingPinned = sessions.filter(s => pinnedIds.has(s.id) && !topIds.has(s.id));
+      sessions = [...top, ...missingPinned];
     }
 
     res.json(sessions);
@@ -802,7 +842,15 @@ app.get('/api/sessions/:sessionId/messages', (req, res) => {
       }
     }
   }
-  const compactSummaries = readCompactSummaries(jsonlPath);
+  const cachedCompact = compactSummaryCache.get(jsonlPath);
+  let compactSummaries;
+  if (cachedCompact && Date.now() - cachedCompact.ts < MESSAGE_CACHE_TTL) {
+    compactSummaries = cachedCompact.data;
+  } else {
+    compactSummaries = readCompactSummaries(jsonlPath);
+    compactSummaryCache.set(jsonlPath, { data: compactSummaries, ts: Date.now() });
+    evictStaleCache(compactSummaryCache);
+  }
   // Match compaction messages to summaries by chronological order
   const compactedMsgs = messages
     .filter(m => m.systemLabel === 'Compacted')
