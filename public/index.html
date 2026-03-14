@@ -5468,12 +5468,14 @@
           <div class="detail-context-stats">
             <div class="stat-item"><span class="stat-label">Total input</span><span class="stat-value">${formatTokens(ctx.inputTokens / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Total output</span><span class="stat-value">${formatTokens(ctx.outputTokens / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Cache write</span><span class="stat-value">${formatTokens((usage.cache_creation_input_tokens || 0) / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Cache read</span><span class="stat-value">${formatTokens((usage.cache_read_input_tokens || 0) / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Current input</span><span class="stat-value">${formatTokens((usage.input_tokens || 0) / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Current output</span><span class="stat-value">${formatTokens((usage.output_tokens || 0) / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Cost</span><span class="stat-value">${formatCost(cost.total_cost_usd)}</span></div>
             <div class="stat-item"><span class="stat-label">Duration</span><span class="stat-value">${formatDuration(cost.total_duration_ms)}</span></div>
             <div class="stat-item"><span class="stat-label">API time</span><span class="stat-value">${formatDuration(cost.total_api_duration_ms)}</span></div>
-            <div class="stat-item"><span class="stat-label">Lines added</span><span class="stat-value">+${(cost.total_lines_added || 0).toLocaleString()}</span></div>
-            <div class="stat-item"><span class="stat-label">Lines removed</span><span class="stat-value">-${(cost.total_lines_removed || 0).toLocaleString()}</span></div>
+            <div class="stat-item"><span class="stat-label">Lines</span><span class="stat-value">+${(cost.total_lines_added || 0).toLocaleString()} / -${(cost.total_lines_removed || 0).toLocaleString()}</span></div>
           </div>
         </div>`;
     }
