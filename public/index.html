@@ -615,47 +615,6 @@
       color: var(--text-tertiary);
       margin-bottom: 8px;
     }
-    .detail-token-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 4px;
-      font-size: 11px;
-    }
-    .detail-token-row .token-label {
-      width: 50px;
-      color: var(--text-tertiary);
-      font-size: 10px;
-    }
-    .detail-token-row .token-bar {
-      flex: 1;
-      height: 8px;
-      background: var(--border);
-      border-radius: 2px;
-      position: relative;
-    }
-    .detail-token-row .token-bar-marker-200k {
-      position: absolute;
-      top: -2px;
-      bottom: -2px;
-      width: 2px;
-      background: var(--text-muted);
-      opacity: 0.7;
-      z-index: 2;
-      border-radius: 1px;
-    }
-    .detail-token-row .token-fill {
-      height: 100%;
-      border-radius: 2px;
-      transition: width 0.4s ease;
-    }
-    .detail-token-row .token-value {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      width: 42px;
-      text-align: right;
-      color: var(--text-tertiary);
-    }
     .detail-context-stats {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -5490,41 +5449,26 @@
     function renderContextDetail(raw) {
       const ctx = getCtx(raw);
       if (!ctx) return '';
-      const inputK = ctx.inputTokens / 1000;
-      const outputK = ctx.outputTokens / 1000;
       const totalK = ctx.size / 1000;
-      const inputPct = totalK > 0 ? (inputK / totalK) * 100 : 0;
-      const outputPct = totalK > 0 ? (outputK / totalK) * 100 : 0;
       const color = getContextColor(ctx.pct);
-      const marker200k = ctx.marker200kPct > 0 && ctx.marker200kPct < 100
-        ? `<div class="token-bar-marker-200k" style="left:${ctx.marker200kPct}%" title="200K"></div>` : '';
 
       const cw = raw.context_window || {};
       const usage = cw.current_usage || {};
       const cost = raw.cost || {};
-      const cacheRead = usage.cache_read_input_tokens || 0;
       const model = raw.model || {};
       const modelName = model.display_name || model.id || '';
 
       return `
         <div class="detail-context">
           <div class="detail-context-title">${modelName ? escapeHtml(modelName) : 'Context Window'}</div>
-          <div class="detail-token-row">
-            <span class="token-label">Input</span>
-            <div class="token-bar"><div class="token-fill" style="width:${inputPct}%;background:var(--accent)"></div>${marker200k}</div>
-            <span class="token-value">${formatTokens(inputK)}</span>
-          </div>
-          <div class="detail-token-row">
-            <span class="token-label">Output</span>
-            <div class="token-bar"><div class="token-fill" style="width:${outputPct}%;background:#fb923c"></div>${marker200k}</div>
-            <span class="token-value">${formatTokens(outputK)}</span>
-          </div>
           <div class="detail-context-summary">
             <span style="color:${color}">${Math.round(ctx.pct)}% used</span>
             <span>${formatTokens((ctx.pct / 100) * totalK)} / ${formatTokens(totalK)}</span>
           </div>
           <div class="detail-context-stats">
-            <div class="stat-item"><span class="stat-label">Cache read</span><span class="stat-value">${formatTokens(cacheRead / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Total input</span><span class="stat-value">${formatTokens(ctx.inputTokens / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Total output</span><span class="stat-value">${formatTokens(ctx.outputTokens / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Cache read</span><span class="stat-value">${formatTokens((usage.cache_read_input_tokens || 0) / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Cost</span><span class="stat-value">${formatCost(cost.total_cost_usd)}</span></div>
             <div class="stat-item"><span class="stat-label">Duration</span><span class="stat-value">${formatDuration(cost.total_duration_ms)}</span></div>
             <div class="stat-item"><span class="stat-label">API time</span><span class="stat-value">${formatDuration(cost.total_api_duration_ms)}</span></div>
