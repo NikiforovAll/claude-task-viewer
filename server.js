@@ -842,6 +842,82 @@ app.post('/api/sessions/:sessionId/agents/:agentId/stop', (req, res) => {
   }
 });
 
+function sanitizeAgentId(raw) {
+  return path.basename(raw).replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+function subagentJsonlPath(meta, agentId) {
+  return path.join(
+    path.dirname(meta.jsonlPath),
+    path.basename(meta.jsonlPath, '.jsonl'),
+    'subagents',
+    'agent-' + agentId + '.jsonl'
+  );
+}
+
+app.get('/api/sessions/:sessionId/agents/:agentId/messages', (req, res) => {
+  const sessionId = resolveSessionId(req.params.sessionId);
+  const agentId = sanitizeAgentId(req.params.agentId);
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+  const metadata = loadSessionMetadata();
+  const meta = metadata[sessionId];
+  if (!meta?.jsonlPath) return res.json({ messages: [], agentId });
+  const subagentJsonl = subagentJsonlPath(meta, agentId);
+  if (!existsSync(subagentJsonl)) return res.json({ messages: [], agentId });
+  const messages = readRecentMessages(subagentJsonl, limit);
+  res.json({ messages, agentId });
+});
+
+app.get('/api/sessions/:sessionId/agents/:agentId/messages/stream', (req, res) => {
+  const sessionId = resolveSessionId(req.params.sessionId);
+  const agentId = sanitizeAgentId(req.params.agentId);
+  const metadata = loadSessionMetadata();
+  const meta = metadata[sessionId];
+  if (!meta?.jsonlPath) {
+    res.status(404).json({ error: 'Session not found' });
+    return;
+  }
+  const subagentJsonl = subagentJsonlPath(meta, agentId);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  res.write('\n');
+
+  let lastSize = existsSync(subagentJsonl) ? statSync(subagentJsonl).size : 0;
+
+  const watcher = chokidar.watch(subagentJsonl, {
+    persistent: true,
+    ignoreInitial: true,
+    awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 }
+  });
+
+  const cleanup = () => watcher.close();
+
+  watcher.on('change', () => {
+    try {
+      const currentSize = statSync(subagentJsonl).size;
+      if (currentSize <= lastSize) return;
+      const messages = readRecentMessages(subagentJsonl, 50);
+      lastSize = currentSize;
+      res.write(`event: agent-log-update\ndata: ${JSON.stringify({ messages, agentId })}\n\n`);
+    } catch (_) {}
+  });
+
+  watcher.on('add', () => {
+    try {
+      const messages = readRecentMessages(subagentJsonl, 50);
+      lastSize = statSync(subagentJsonl).size;
+      res.write(`event: agent-log-update\ndata: ${JSON.stringify({ messages, agentId })}\n\n`);
+    } catch (_) {}
+  });
+
+  req.on('close', cleanup);
+  res.on('error', cleanup);
+});
+
 app.get('/api/sessions/:sessionId/messages', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
   const metadata = loadSessionMetadata();

@@ -539,6 +539,9 @@
       <div class="modal-header">
         <h3 id="agent-modal-title" class="modal-title">Agent</h3>
         <div style="display:flex;align-items:center;gap:4px;">
+          <button id="agent-modal-log-btn" class="icon-btn" aria-label="View session log" title="View session log" onclick="viewAgentLog(currentAgentModalId)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </button>
           <button id="agent-modal-pin-btn" class="icon-btn" aria-label="Pin agent" title="Pin agent" onclick="togglePinFromAgentModal()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           </button>

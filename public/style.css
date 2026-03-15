@@ -2124,6 +2124,47 @@ body::before {
   font-size: 12px;
 }
 
+.agent-log-back {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 16px;
+  padding: 0 8px 0 0;
+  line-height: 1;
+}
+.agent-log-back:hover {
+  color: var(--text-primary);
+}
+.agent-log-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-log-id {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.msg-agent-log-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  align-self: flex-start;
+}
+.msg-item:hover .msg-agent-log-btn {
+  opacity: 1;
+}
+.msg-agent-log-btn:hover,
+.msg-item:hover .msg-agent-log-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
 /* #endregion */
 
 /* #region AGENT_FOOTER */

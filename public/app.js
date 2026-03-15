@@ -28,6 +28,8 @@ let focusZone = 'board'; // 'board' | 'sidebar'
 let selectedSessionIdx = -1;
 let selectedSessionKbId = null;
 let sessionJustSelected = false;
+let agentLogMode = null;
+let agentLogSSE = null;
 
 function getUrlState() {
   const params = new URLSearchParams(window.location.search);
@@ -67,6 +69,7 @@ function resetState() {
   ownerFilter = '';
   searchQuery = '';
   viewMode = 'all';
+  if (agentLogMode) exitAgentLogMode();
   currentSessionId = null;
   const searchInput = document.getElementById('search-input');
   if (searchInput) searchInput.value = '';
@@ -427,6 +430,7 @@ async function fetchTasks(sessionId) {
     lastCurrentTasksHash = hash;
 
     currentTasks = newTasks;
+    if (agentLogMode && sessionId !== currentSessionId) exitAgentLogMode();
     currentSessionId = sessionId;
     currentPins = loadPins(sessionId);
     ownerFilter = '';
@@ -437,7 +441,7 @@ async function fetchTasks(sessionId) {
     updateUrl();
     renderSession();
     fetchAgents(sessionId);
-    fetchMessages(sessionId);
+    if (!agentLogMode) fetchMessages(sessionId);
   } catch (error) {
     console.error('Failed to fetch tasks:', error);
     currentTasks = [];
@@ -491,6 +495,62 @@ function toggleMessagePanel() {
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: used in HTML
+function viewAgentLog(agentId) {
+  const agent = currentAgents.find((a) => a.agentId === agentId);
+  if (!agent) return;
+  const shortId = agentId.length > 8 ? agentId.slice(0, 8) : agentId;
+  agentLogMode = { agentId, sessionId: currentSessionId, agentType: agent.type || 'unknown' };
+  closeAgentModal();
+  if (!messagePanelOpen) toggleMessagePanel();
+  const header = document.querySelector('.message-panel-header h3');
+  if (header) {
+    header.innerHTML = `<span class="agent-log-title"><button class="agent-log-back" onclick="exitAgentLogMode()" title="Back to session log">&larr;</button> ${escapeHtml(agent.type || 'unknown')} <code class="agent-log-id">(${escapeHtml(shortId)})</code></span>`;
+  }
+  fetchAgentMessages();
+  if (agentLogSSE) {
+    agentLogSSE.close();
+    agentLogSSE = null;
+  }
+  agentLogSSE = new EventSource(`/api/sessions/${agentLogMode.sessionId}/agents/${agentId}/messages/stream`);
+  agentLogSSE.addEventListener('agent-log-update', (e) => {
+    if (!agentLogMode || agentLogMode.agentId !== agentId) return;
+    try {
+      const data = JSON.parse(e.data);
+      currentMessages = data.messages;
+      if (messagePanelOpen) renderMessages(data.messages);
+    } catch (_) {}
+  });
+  agentLogSSE.onerror = () => {};
+}
+
+function exitAgentLogMode() {
+  agentLogMode = null;
+  if (agentLogSSE) {
+    agentLogSSE.close();
+    agentLogSSE = null;
+  }
+  const header = document.querySelector('.message-panel-header h3');
+  if (header) header.textContent = 'Session Log';
+  lastMessagesHash = '';
+  if (currentSessionId) fetchMessages(currentSessionId);
+}
+
+async function fetchAgentMessages() {
+  if (!agentLogMode) return;
+  const { sessionId, agentId } = agentLogMode;
+  try {
+    const res = await fetch(`/api/sessions/${sessionId}/agents/${agentId}/messages?limit=100`);
+    if (!res.ok || !agentLogMode || agentLogMode.agentId !== agentId) return;
+    const data = await res.json();
+    if (!agentLogMode || agentLogMode.agentId !== agentId) return;
+    currentMessages = data.messages;
+    if (messagePanelOpen) renderMessages(data.messages);
+  } catch (e) {
+    console.error('[fetchAgentMessages]', e);
+  }
+}
+
+// biome-ignore lint/correctness/noUnusedVariables: used in HTML
 function openLiveLatestMessage() {
   if (currentMessages.length) {
     msgDetailFollowLatest = true;
@@ -506,7 +566,6 @@ async function fetchMessages(sessionId) {
     const hash = JSON.stringify(data.messages);
     if (hash === lastMessagesHash) return;
     lastMessagesHash = hash;
-    currentMessages = data.messages;
     let agentEnriched = false;
     for (const m of data.messages) {
       if (m.agentId && m.agentPrompt) {
@@ -519,6 +578,8 @@ async function fetchMessages(sessionId) {
     }
     if (agentEnriched) renderAgentFooter();
     updateLatestMessage(data.messages);
+    if (agentLogMode) return;
+    currentMessages = data.messages;
     if (messagePanelOpen) renderMessages(data.messages);
     if (msgDetailFollowLatest && data.messages.length) {
       showMsgDetail(data.messages.length - 1);
@@ -601,12 +662,14 @@ function renderPinnedSection() {
           </div>`;
       } else if (p.type === 'tool_use') {
         const toolDetail = p.detail ? ` <span style="color:var(--text-muted)">${escapeHtml(p.detail)}</span>` : '';
+        const pinnedAgentLogBtn = p.tool === 'Agent' && p.agentId ? agentLogButton(p.agentId) : '';
         return `<div class="msg-item msg-tool" ${click}>
             ${MSG_ICON_TOOL}
-            <div class="msg-body"><div class="msg-text">${escapeHtml(p.tool || '')}${toolDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(p.tool || '')}${toolDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${pinnedAgentLogBtn}${unpin}
           </div>`;
       } else if (p.type === 'agent') {
         const agentClick = `onclick="showAgentModal('${escapeHtml(p.agentId)}')" style="cursor:pointer"`;
+        const agentLogBtn = agentLogButton(p.agentId);
         const msgTrunc = p.lastMessage
           ? escapeHtml(
               stripAnsi(p.lastMessage.trim())
@@ -617,7 +680,7 @@ function renderPinnedSection() {
         const agentDetail = msgTrunc ? ` <span style="color:var(--text-muted)">${msgTrunc}</span>` : '';
         return `<div class="msg-item msg-tool" ${agentClick}>
             ${MSG_ICON_TOOL}
-            <div class="msg-body"><div class="msg-text">${escapeHtml(p.agentType || 'Agent')}${agentDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${unpin}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(p.agentType || 'Agent')}${agentDetail}</div><div class="msg-time">${formatDate(p.timestamp)}</div></div>${agentLogBtn}${unpin}
           </div>`;
       }
       return '';
@@ -636,7 +699,7 @@ function renderPinnedSection() {
 function renderMessages(messages) {
   const container = document.getElementById('message-panel-content');
   const pinnedContainer = document.getElementById('message-panel-pinned');
-  pinnedContainer.innerHTML = renderPinnedSection();
+  pinnedContainer.innerHTML = agentLogMode ? '' : renderPinnedSection();
   if (!messages.length) {
     container.innerHTML = '<div class="msg-empty">No messages found for this session</div>';
     return;
@@ -670,13 +733,14 @@ function renderMessages(messages) {
           m.tool === 'Agent' && m.agentId
             ? ` <span class="msg-agent-link" title="View agent" onclick="event.stopPropagation();showAgentModal('${escapeHtml(m.agentId)}')">⇗</span>`
             : '';
+        const agentLogBtn = m.tool === 'Agent' && m.agentId ? agentLogButton(m.agentId) : '';
         const itemClick =
           m.tool === 'Agent' && m.agentId
             ? `onclick="showAgentModal('${escapeHtml(m.agentId)}')" style="cursor:pointer"`
             : clickable;
         return `<div class="msg-item msg-tool" ${itemClick}>
             ${MSG_ICON_TOOL}
-            <div class="msg-body"><div class="msg-text">${escapeHtml(m.tool)}${toolDetail}${agentLink}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>${pinBtn}
+            <div class="msg-body"><div class="msg-text">${escapeHtml(m.tool)}${toolDetail}${agentLink}</div><div class="msg-time">${formatDate(m.timestamp)}</div></div>${agentLogBtn}${pinBtn}
           </div>`;
       }
       return '';
@@ -701,6 +765,11 @@ const MSG_ICON_TOOL =
   '<svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
 const MSG_ICON_SYSTEM =
   '<svg class="msg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+const AGENT_LOG_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+function agentLogButton(agentId) {
+  return `<button class="msg-agent-log-btn" onclick="event.stopPropagation();viewAgentLog('${escapeHtml(agentId)}')" title="View agent log">${AGENT_LOG_ICON}</button>`;
+}
 
 function getPinId(m) {
   const content = m.type === 'tool_use' ? `${m.tool}:${(m.detail || '').slice(0, 100)}` : (m.text || '').slice(0, 100);
@@ -1411,6 +1480,7 @@ function closeAgentModal() {
 async function showAllTasks() {
   try {
     viewMode = 'all';
+    if (agentLogMode) exitAgentLogMode();
     currentSessionId = null;
     ownerFilter = '';
     currentAgents = [];
@@ -2773,6 +2843,7 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'Escape') {
     if (detailPanel.classList.contains('visible')) closeDetailPanel();
+    else if (agentLogMode) exitAgentLogMode();
     else if (messagePanelOpen) toggleMessagePanel();
     return;
   }
@@ -2859,7 +2930,7 @@ function setupEventSource() {
         clearTimeout(metadataRefreshTimer);
         metadataRefreshTimer = setTimeout(() => {
           fetchSessions().catch((err) => console.error('[SSE] fetchSessions failed:', err));
-          if (currentSessionId) fetchMessages(currentSessionId);
+          if (currentSessionId && !agentLogMode) fetchMessages(currentSessionId);
         }, 2000);
       } else {
         pendingTaskSessionIds.add(sessionId);
