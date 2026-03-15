@@ -1,0 +1,2 @@
+npx @biomejs/biome check public/app.js public/style.css
+npm test

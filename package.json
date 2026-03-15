@@ -11,7 +11,8 @@
     "dev": "node server.js --open",
     "test": "node --test test/contracts.test.js",
     "test:hooks": "bash tests/test-agent-spy.sh",
-    "validate:schemas": "node test/validate-live-schemas.js"
+    "validate:schemas": "node test/validate-live-schemas.js",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -51,6 +52,7 @@
   ],
   "devDependencies": {
     "ajv": "^8.18.0",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "husky": "^9.1.7"
   }
 }
