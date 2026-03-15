@@ -1067,7 +1067,7 @@ async function copyWithFeedback(text, btn) {
 //#region TOOL_RENDERING
 function renderToolParamsHtml(params) {
   if (!params) return '';
-  const BLOCK_KEYS = new Set(['old_string', 'new_string', 'content']);
+  const BLOCK_KEYS = new Set(['old_string', 'new_string', 'content', 'plan']);
   const badges = [],
     blocks = [];
   for (const [k, v] of Object.entries(params)) {
@@ -1117,6 +1117,12 @@ function renderToolParamsHtml(params) {
           <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:2px">content${writeMoreBtn}</div>
           <pre class="msg-detail-pre" style="max-height:300px;overflow:auto">${escapeHtml(truncContent)}</pre>
           ${fullBlock}
+        </div>`;
+  }
+  if (params.plan) {
+    html += `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px">Plan</div>
+          <div class="markdown-body">${renderMarkdown(params.plan)}</div>
         </div>`;
   }
   return html;
