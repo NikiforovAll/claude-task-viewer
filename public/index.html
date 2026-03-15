@@ -576,23 +576,22 @@
     .context-bar { display: none; margin-top: 6px; }
     .has-context .context-bar { display: block; }
     .context-bar-track {
-      height: 4px;
+      height: 2px;
       background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
+      border-radius: 1px;
+      overflow: visible;
       position: relative;
     }
     .context-bar-fill {
       height: 100%;
-      border-radius: 2px;
+      border-radius: 1.5px;
       transition: width 0.4s ease, background 0.3s;
     }
-    .context-bar-marker-200k {
+    .context-bar-marker {
       position: absolute;
       top: -1px;
       bottom: -1px;
       width: 2px;
-      background: var(--text-muted);
       opacity: 0.7;
       z-index: 2;
       border-radius: 1px;
@@ -607,6 +606,20 @@
     }
 
     .detail-context { margin-bottom: 16px; }
+    .detail-context-bar {
+      margin: 8px 0 4px;
+    }
+    .detail-context-bar .context-bar-track {
+      height: 6px;
+      border-radius: 3px;
+    }
+    .detail-context-bar .context-bar-fill {
+      border-radius: 3px;
+    }
+    .detail-context-bar .context-bar-marker {
+      top: -2px;
+      bottom: -2px;
+    }
     .detail-context-title {
       font-size: 11px;
       font-weight: 600;
@@ -632,6 +645,11 @@
     }
     .detail-context-stats .stat-label { color: var(--text-tertiary); }
     .detail-context-stats .stat-value { color: var(--text-secondary); }
+    .detail-context-stats .stat-divider {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--border);
+      margin: 2px 0;
+    }
     .detail-context-summary {
       margin-top: 6px;
       padding-top: 6px;
@@ -5395,12 +5413,25 @@
     }
 
 
-    const CTX_MARKER_TOKENS = 200000;
+    const MODEL_THRESHOLDS = [
+      { match: /sonnet|haiku/i, yellow: 100000, orange: 130000, red: 150000 },
+      { match: /opus/i,         yellow: 100000, orange: 200000, red: 700000 },
+    ];
+    const DEFAULT_THRESHOLDS = { yellow: 100000, orange: 130000, red: 150000 };
 
-    function getContextColor(pct) {
-      if (pct < 50) return '#5b9a6b';
-      if (pct < 70) return '#b8a63e';
-      if (pct < 85) return '#c07840';
+    function getModelThresholds(modelName) {
+      if (!modelName) return DEFAULT_THRESHOLDS;
+      for (const t of MODEL_THRESHOLDS) {
+        if (t.match.test(modelName)) return t;
+      }
+      return DEFAULT_THRESHOLDS;
+    }
+
+    function getContextColor(usedTokens, modelName) {
+      const t = getModelThresholds(modelName);
+      if (usedTokens < t.yellow) return '#5b9a6b';
+      if (usedTokens < t.orange) return '#b8a63e';
+      if (usedTokens < t.red) return '#c07840';
       return '#b85555';
     }
 
@@ -5414,28 +5445,44 @@
       if (!raw) return null;
       const cw = raw.context_window || {};
       const size = cw.context_window_size || 0;
+      const pct = cw.used_percentage || 0;
+      const modelName = (raw.model || {}).display_name || (raw.model || {}).id || '';
+      const thresholds = getModelThresholds(modelName);
+      const usedTokens = size > 0 ? (pct / 100) * size : 0;
+      const markers = size > 0
+        ? [
+            { tokens: thresholds.yellow, pct: (thresholds.yellow / size) * 100, color: '#b8a63e' },
+            { tokens: thresholds.orange, pct: (thresholds.orange / size) * 100, color: '#c07840' },
+            { tokens: thresholds.red,    pct: (thresholds.red / size) * 100,    color: '#b85555' },
+          ].filter(m => m.pct > 0 && m.pct < 100)
+        : [];
       return {
-        pct: cw.used_percentage || 0,
-        remaining: cw.remaining_percentage || (100 - (cw.used_percentage || 0)),
+        pct,
+        remaining: cw.remaining_percentage || (100 - pct),
         size,
+        usedTokens,
+        modelName,
         inputTokens: cw.total_input_tokens || 0,
         outputTokens: cw.total_output_tokens || 0,
-        marker200kPct: size > 0 ? (CTX_MARKER_TOKENS / size) * 100 : 0,
+        markers,
       };
     }
 
     function renderContextBar(raw) {
       const ctx = getCtx(raw);
       if (!ctx) return '';
-      const color = getContextColor(ctx.pct);
+      const color = getContextColor(ctx.usedTokens, ctx.modelName);
+      const markersHtml = ctx.markers.map(m =>
+        `<div class="context-bar-marker" style="left:${m.pct}%;background:${m.color}" title="${formatTokens(m.tokens / 1000)}"></div>`
+      ).join('');
       return `
         <div class="context-bar" style="display:block">
           <div class="context-bar-track">
             <div class="context-bar-fill" style="width:${ctx.pct}%;background:${color}"></div>
-            ${ctx.marker200kPct > 0 && ctx.marker200kPct < 100 ? `<div class="context-bar-marker-200k" style="left:${ctx.marker200kPct}%" title="200K tokens"></div>` : ''}
+            ${markersHtml}
           </div>
           <div class="context-bar-labels">
-            <span style="color:${color}">${Math.round(ctx.pct)}%</span>
+            <span style="color:${color}">${Math.round(ctx.pct)}% (${formatTokens(ctx.usedTokens / 1000)})</span>
             <span>${Math.round(ctx.remaining)}% free</span>
           </div>
         </div>`;
@@ -5450,32 +5497,41 @@
       const ctx = getCtx(raw);
       if (!ctx) return '';
       const totalK = ctx.size / 1000;
-      const color = getContextColor(ctx.pct);
+      const color = getContextColor(ctx.usedTokens, ctx.modelName);
 
       const cw = raw.context_window || {};
       const usage = cw.current_usage || {};
       const cost = raw.cost || {};
-      const model = raw.model || {};
-      const modelName = model.display_name || model.id || '';
+      const modelName = ctx.modelName;
 
       return `
         <div class="detail-context">
           <div class="detail-context-title">${modelName ? escapeHtml(modelName) : 'Context Window'}</div>
+          <div class="detail-context-bar">
+            <div class="context-bar-track">
+              <div class="context-bar-fill" style="width:${ctx.pct}%;background:${color}"></div>
+              ${ctx.markers.map(m =>
+                `<div class="context-bar-marker" style="left:${m.pct}%;background:${m.color}" title="${formatTokens(m.tokens / 1000)}"></div>`
+              ).join('')}
+            </div>
+          </div>
           <div class="detail-context-summary">
             <span style="color:${color}">${Math.round(ctx.pct)}% used</span>
             <span>${formatTokens((ctx.pct / 100) * totalK)} / ${formatTokens(totalK)}</span>
           </div>
           <div class="detail-context-stats">
-            <div class="stat-item"><span class="stat-label">Total input</span><span class="stat-value">${formatTokens(ctx.inputTokens / 1000)}</span></div>
-            <div class="stat-item"><span class="stat-label">Total output</span><span class="stat-value">${formatTokens(ctx.outputTokens / 1000)}</span></div>
-            <div class="stat-item"><span class="stat-label">Cache write</span><span class="stat-value">${formatTokens((usage.cache_creation_input_tokens || 0) / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Cache read</span><span class="stat-value">${formatTokens((usage.cache_read_input_tokens || 0) / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Cache write</span><span class="stat-value">${formatTokens((usage.cache_creation_input_tokens || 0) / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Current input</span><span class="stat-value">${formatTokens((usage.input_tokens || 0) / 1000)}</span></div>
             <div class="stat-item"><span class="stat-label">Current output</span><span class="stat-value">${formatTokens((usage.output_tokens || 0) / 1000)}</span></div>
-            <div class="stat-item"><span class="stat-label">Cost</span><span class="stat-value">${formatCost(cost.total_cost_usd)}</span></div>
+            <div class="stat-divider"></div>
+            <div class="stat-item"><span class="stat-label">Total input</span><span class="stat-value">${formatTokens(ctx.inputTokens / 1000)}</span></div>
+            <div class="stat-item"><span class="stat-label">Total output</span><span class="stat-value">${formatTokens(ctx.outputTokens / 1000)}</span></div>
+            <div class="stat-divider"></div>
+            <div class="stat-item"><span class="stat-label">Cost</span><span class="stat-value" style="color:${(cost.total_cost_usd || 0) < 0.5 ? '#5b9a6b' : (cost.total_cost_usd || 0) < 2 ? '#b8a63e' : (cost.total_cost_usd || 0) < 5 ? '#c07840' : '#b85555'}">${formatCost(cost.total_cost_usd)}</span></div>
             <div class="stat-item"><span class="stat-label">Duration</span><span class="stat-value">${formatDuration(cost.total_duration_ms)}</span></div>
             <div class="stat-item"><span class="stat-label">API time</span><span class="stat-value">${formatDuration(cost.total_api_duration_ms)}</span></div>
-            <div class="stat-item"><span class="stat-label">Lines</span><span class="stat-value">+${(cost.total_lines_added || 0).toLocaleString()} / -${(cost.total_lines_removed || 0).toLocaleString()}</span></div>
+            <div class="stat-item"><span class="stat-label">Lines</span><span class="stat-value"><span style="color:#5b9a6b">+${(cost.total_lines_added || 0).toLocaleString()}</span> / <span style="color:#b85555">-${(cost.total_lines_removed || 0).toLocaleString()}</span></span></div>
           </div>
         </div>`;
     }
