@@ -34,6 +34,7 @@ const {
 } = require('./lib/parsers');
 const { inlineHtmlAssets } = require('./lib/inline-assets');
 const { buildDecision, decisionFileName, isDecisionFile, waitSecondsFrom, isLapsed } = require('./lib/approvals');
+const { getClaudeDir, getArgValue } = require('./lib/claude-dir');
 
 if (process.argv.includes("--install") || process.argv.includes("--uninstall")) {
   const { runInstall, runUninstall } = require("./install");
@@ -56,30 +57,8 @@ app.use(net.hostGuard);
 app.use(net.frameGuard);
 app.use(net.originGuard);
 
-// Parse --dir flag for custom Claude directory
-function getClaudeDir() {
-  const dirIndex = process.argv.findIndex(arg => arg.startsWith('--dir'));
-  if (dirIndex !== -1) {
-    const arg = process.argv[dirIndex];
-    if (arg.includes('=')) {
-      const dir = arg.split('=')[1];
-      return dir.startsWith('~') ? dir.replace('~', os.homedir()) : dir;
-    } else if (process.argv[dirIndex + 1]) {
-      const dir = process.argv[dirIndex + 1];
-      return dir.startsWith('~') ? dir.replace('~', os.homedir()) : dir;
-    }
-  }
-  return process.env.CLAUDE_CONFIG_DIR || process.env.CLAUDE_DIR || path.join(os.homedir(), '.claude');
-}
-
 function getArgUrl(argName, envName) {
-  const idx = process.argv.findIndex(arg => arg.startsWith(`--${argName}`));
-  if (idx !== -1) {
-    const arg = process.argv[idx];
-    if (arg.includes('=')) return arg.split('=').slice(1).join('=');
-    if (process.argv[idx + 1]) return process.argv[idx + 1];
-  }
-  return process.env[envName] || null;
+  return getArgValue(argName) || process.env[envName] || null;
 }
 
 const MARKETPLACE_URL = getArgUrl('marketplace-url', 'MARKETPLACE_URL');

@@ -9173,9 +9173,9 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     fwd(e.key);
   }
-  // Its own branch: the Alt+digit case below requires !ctrlKey. P opens the hub's project
-  // palette, W its config-dir palette.
-  if (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && /^[pw]$/i.test(e.key)) {
+  // Own branch: the Alt+digit case below requires !ctrlKey. The hub owns the Ctrl+Alt+letter
+  // keymap and ignores unbound letters.
+  if (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && /^[a-z]$/i.test(e.key)) {
     fwd(e.key);
   }
   if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && /^[1-9]$/.test(e.key)) {

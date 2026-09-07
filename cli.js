@@ -155,7 +155,7 @@ function printTopHelp() {
   console.log('  --version, -v         Print version and exit');
   console.log('\nServer mode (no subcommand):');
   console.log('  --port <n>            Port to listen on (default 3541)');
-  console.log('  --dir <path>          Override Claude config dir (default ~/.claude)');
+  console.log('  --dir <path>          Override Claude config dir (default ~/.claude); also targets --install/--uninstall');
   console.log('  --open                Open browser on start');
   console.log('  --install, --uninstall    Install or remove the plugin, context spy, and statusline');
   console.log('  --plugin-only         With --install: refresh only the plugin, skip context spy and statusline');

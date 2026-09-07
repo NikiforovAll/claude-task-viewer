@@ -4,11 +4,11 @@
 # is unchanged when the feature is off), then — only when explicitly enabled and
 # the board's server is alive — waits for a decision file written by the server.
 #
-# Contract (_plans/cck-ui-approvals/decisions.md):
-#   marker    ~/.claude/.cck/agent-activity/<sid>/_waiting.json            (D8: + id, cwd, permissionSuggestions)
-#   decision  ~/.claude/.cck/agent-activity/<sid>/_decision-<id>.json      (server writes it, Phase 3)
-#   config    ~/.claude/.cck/approvals.json {enabled, mode, waitSeconds}   (D2: fail-open when absent)
-#   liveness  ~/.claude/.cck/server.json {port, pid}                       (D1: a dead board costs nothing)
+# Contract (_plans/cck-ui-approvals/decisions.md), rooted at <CLAUDE_CONFIG_DIR or ~/.claude>/.cck:
+#   marker    agent-activity/<sid>/_waiting.json            (D8: + id, cwd, permissionSuggestions)
+#   decision  agent-activity/<sid>/_decision-<id>.json      (server writes it, Phase 3)
+#   config    approvals.json {enabled, mode, waitSeconds}   (D2: fail-open when absent)
+#   liveness  server.json {port, pid}                       (D1: a dead board costs nothing)
 #
 # First writer wins (D5): a terminal answer deletes the marker via PostToolUse
 # and this gate exits silently; a decision arriving after the tool already ran
@@ -37,7 +37,7 @@ KIND="permission"
 [ "$TOOL_NAME" = "AskUserQuestion" ] && KIND="question"
 [ "$TOOL_NAME" = "ExitPlanMode" ] && KIND="plan"
 
-CCK_DIR="$HOME/.claude/.cck"
+CCK_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.cck"
 DIR="$CCK_DIR/agent-activity/$SESSION_ID"
 MARKER="$DIR/_waiting.json"
 mkdir -p "$DIR"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tracks subagent lifecycle: one append-only JSONL file per agent, grouped by session
-# Layout: ~/.claude/.cck/agent-activity/{sessionId}/{agentId}.jsonl
+# Layout: <CLAUDE_CONFIG_DIR or ~/.claude>/.cck/agent-activity/{sessionId}/{agentId}.jsonl
 # Each line is a lifecycle event (start | idle | stop). Server folds last-line-wins.
 
 INPUT=$(cat)
@@ -17,7 +17,7 @@ eval "$(echo "$INPUT" | jq -r '
 
 [ -z "$SESSION_ID" ] && exit 0
 
-CCK_ACTIVITY="$HOME/.claude/.cck/agent-activity"
+CCK_ACTIVITY="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.cck/agent-activity"
 
 # Map session to custom task list on session start
 if [ "$EVENT" = "SessionStart" ]; then

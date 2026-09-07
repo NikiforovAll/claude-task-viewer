@@ -143,6 +143,14 @@ assert_json "$MAP_FILE" '.["s-map2"].project' "C:/Users/user/dev/app" "second se
 run_hook '{"session_id":"s-noenv","agent_id":"","hook_event_name":"SessionStart","tool_name":"","cwd":"/tmp"}'
 assert_no_file "$MAPS_DIR/no-env.json" "no map without CLAUDE_CODE_TASK_LIST_ID"
 
+# ─── CLAUDE_CONFIG_DIR ───────────────────────────────────────────
+echo "CLAUDE_CONFIG_DIR:"
+
+ALT_DIR="$TMPDIR/alt-claude"
+CLAUDE_CONFIG_DIR="$ALT_DIR" run_hook '{"session_id":"s-alt","agent_id":"","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"},"agent_type":""}'
+assert_file "$ALT_DIR/.cck/agent-activity/s-alt/_waiting.json" "writes under CLAUDE_CONFIG_DIR when set"
+assert_no_file "$ACTIVITY_DIR/s-alt/_waiting.json" "nothing written under ~/.claude"
+
 # ─── Summary ─────────────────────────────────────────────────────
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

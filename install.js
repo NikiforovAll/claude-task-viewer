@@ -5,15 +5,19 @@ const path = require('path');
 const os = require('os');
 const readline = require('readline');
 const { execSync } = require('child_process');
+const { getClaudeDir, claudeCliEnv, displayPath } = require('./lib/claude-dir');
 
-const CLAUDE_DIR = path.join(os.homedir(), '.claude');
+const CLAUDE_DIR = getClaudeDir();
+const CLI_ENV = claudeCliEnv(CLAUDE_DIR);
 const CCK_DIR = path.join(CLAUDE_DIR, '.cck');
 const HOOKS_DIR = path.join(CLAUDE_DIR, 'hooks');
 const SETTINGS_PATH = path.join(CLAUDE_DIR, 'settings.json');
 const PLUGIN_SRC = path.join(__dirname, 'plugin');
 const PLUGIN_DEST = path.join(CCK_DIR, 'plugin');
-const CTX_SCRIPT_SRC = path.join(PLUGIN_SRC, 'plugins', 'claude-code-kanban', 'scripts', 'context-status.sh');
-const CTX_SCRIPT_DEST = path.join(HOOKS_DIR, 'context-status.sh');
+const CTX_SCRIPT_NAME = 'context-status.sh';
+const CTX_SCRIPT_SRC = path.join(PLUGIN_SRC, 'plugins', 'claude-code-kanban', 'scripts', CTX_SCRIPT_NAME);
+const CTX_SCRIPT_DEST = path.join(HOOKS_DIR, CTX_SCRIPT_NAME);
+const CTX_COMMAND = displayPath(CTX_SCRIPT_DEST);
 
 // ANSI helpers
 const green = s => `\x1b[32m${s}\x1b[0m`;
@@ -34,7 +38,7 @@ function prompt(question) {
 
 function runCLI(cmd, okPatterns = []) {
   try {
-    const out = execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const out = execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: CLI_ENV }).trim();
     return { ok: true, output: out };
   } catch (e) {
     const stderr = e.stderr?.trim() || e.message;
@@ -78,6 +82,7 @@ function copyDirSync(src, dest) {
 
 async function runInstall({ pluginOnly = false } = {}) {
   console.log(`\n  ${bold('claude-code-kanban')} — ${pluginOnly ? 'Plugin installer' : 'Plugin & StatusLine installer'}\n`);
+  console.log(`  Claude config dir: ${dim(displayPath(CLAUDE_DIR))}\n`);
   let failed = false;
 
   // 1. Check prerequisites
@@ -102,7 +107,7 @@ async function runInstall({ pluginOnly = false } = {}) {
   // 2. Copy plugin to stable location & register marketplace
   console.log(`\n  Plugin: ${dim(PLUGIN_DEST)}`);
   if (pluginOnly || await prompt(`    Install claude-code-kanban plugin? [Y/n] `)) {
-    process.stdout.write('    Copying plugin to ~/.claude/.cck/plugin... ');
+    process.stdout.write(`    Copying plugin to ${displayPath(PLUGIN_DEST)}... `);
     try {
       clearFilesRecursive(PLUGIN_DEST);
       copyDirSync(PLUGIN_SRC, PLUGIN_DEST);
@@ -178,8 +183,7 @@ async function runInstall({ pluginOnly = false } = {}) {
       return;
     }
 
-    const CTX_COMMAND = '~/.claude/hooks/context-status.sh';
-    const hasCtx = settings.statusLine?.command?.includes('context-status.sh');
+    const hasCtx = settings.statusLine?.command?.includes(CTX_SCRIPT_NAME);
     if (hasCtx) {
       console.log(`\n  StatusLine: ${green('✓')} Already configured`);
     } else if (!settings.statusLine) {
@@ -218,6 +222,7 @@ function printSummary(failed = false) {
 
 async function runUninstall() {
   console.log(`\n  ${bold('claude-code-kanban')} — Uninstaller\n`);
+  console.log(`  Claude config dir: ${dim(displayPath(CLAUDE_DIR))}\n`);
 
   // 1. Uninstall plugin via Claude CLI
   process.stdout.write('  Removing plugin... ');
@@ -260,9 +265,9 @@ async function runUninstall() {
       let changed = false;
 
       // Strip context-status.sh from statusLine
-      if (settings.statusLine?.command?.includes('context-status.sh')) {
+      if (settings.statusLine?.command?.includes(CTX_SCRIPT_NAME)) {
         const cmd = settings.statusLine.command;
-        const stripped = cmd.replace(/~\/\.claude\/hooks\/context-status\.sh\s*\|\s*/, '').trim();
+        const stripped = cmd.replace(new RegExp(`\\S*${CTX_SCRIPT_NAME.replace('.', '\\.')}\\s*\\|\\s*`), '').trim();
         if (stripped && stripped !== cmd) {
           settings.statusLine.command = stripped;
           console.log(`  StatusLine: ${green('✓')} Restored to "${stripped}"`);

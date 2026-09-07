@@ -22,6 +22,8 @@ npx claude-code-kanban --install
 
 Non-destructive — existing settings in `~/.claude/settings.json` are preserved. Uninstall anytime with `npx claude-code-kanban --uninstall`.
 
+Using another Claude config dir? Pass `--dir=<path>` (or set `CLAUDE_CONFIG_DIR`) to both `--install` and `--uninstall`. The plugin, hooks and statusLine land in that dir, and the hooks write their data under it when Claude Code runs with the same `CLAUDE_CONFIG_DIR`.
+
 ### 2. Start the dashboard
 
 ```bash
@@ -84,7 +86,7 @@ The script pipes through, so your existing statusline keeps working.
 ```bash
 PORT=8080 npx claude-code-kanban             # Custom port (falls back if busy)
 npx claude-code-kanban --open                # Auto-open browser
-npx claude-code-kanban --dir=~/.claude-work  # Custom Claude config dir
+npx claude-code-kanban --dir=~/.claude-work  # Custom Claude config dir (or CLAUDE_CONFIG_DIR)
 ```
 
 Global install: `npm install -g claude-code-kanban`, then `claude-code-kanban --open`.

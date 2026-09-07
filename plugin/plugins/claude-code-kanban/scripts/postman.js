@@ -19,7 +19,8 @@ const os = require('os');
 const path = require('path');
 
 const SESSION_ID = process.env.CLAUDE_CODE_SESSION_ID;
-const SERVER_INFO = path.join(os.homedir(), '.claude', '.cck', 'server.json');
+const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+const SERVER_INFO = path.join(CLAUDE_DIR, '.cck', 'server.json');
 // The server caps its own wait at 120s. Sitting at the ceiling halves every recurring
 // cost -- handshake, route walk, timer, empty response -- and costs no event latency,
 // because an enqueue wakes the poll immediately.
