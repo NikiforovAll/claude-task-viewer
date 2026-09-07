@@ -34,7 +34,7 @@ const {
 } = require('./lib/parsers');
 const { inlineHtmlAssets } = require('./lib/inline-assets');
 const { buildDecision, decisionFileName, isDecisionFile, waitSecondsFrom, isLapsed } = require('./lib/approvals');
-const { getClaudeDir, getArgValue } = require('./lib/claude-dir');
+const { getClaudeDir, getArgValue, storageNamespace } = require('./lib/claude-dir');
 
 if (process.argv.includes("--install") || process.argv.includes("--uninstall")) {
   const { runInstall, runUninstall } = require("./install");
@@ -493,6 +493,18 @@ app.use(express.json());
 
 app.get('/hub-config', (_req, res) => {
   res.json({ enabled: !!process.env.CLAUDE_HUB, url: process.env.HUB_URL || null });
+});
+
+// app.js reads localStorage synchronously at startup, before any fetch could deliver the
+// namespace, so it is injected into the page instead of served from /hub-config.
+const STORAGE_NS = storageNamespace(CLAUDE_DIR);
+const NS_DECL = 'window.__STORAGE_NS__ = null;';
+const RAW_INDEX = readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+if (!RAW_INDEX.includes(NS_DECL)) throw new Error(`public/index.html is missing "${NS_DECL}"`);
+const INDEX_HTML = RAW_INDEX.replace(NS_DECL, `window.__STORAGE_NS__ = ${JSON.stringify(STORAGE_NS)};`);
+app.get(['/', '/index.html'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(INDEX_HTML);
 });
 
 // Serve static files

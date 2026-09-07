@@ -1,4 +1,23 @@
 //#region STATE
+// Set by the server in index.html: null for the default Claude dir, a per-dir prefix otherwise.
+const STORAGE_NS = window.__STORAGE_NS__ ? `${window.__STORAGE_NS__}:` : '';
+// Theme is hub-wide (echoed to every app via hub:theme), so it stays shared across config dirs.
+const GLOBAL_KEYS = new Set(['theme', 'color-theme']);
+const nsKey = (k) => (GLOBAL_KEYS.has(k) ? k : STORAGE_NS + k);
+const store = {
+  keys() {
+    const out = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(STORAGE_NS)) out.push(k.slice(STORAGE_NS.length));
+    }
+    return out;
+  },
+  getItem: (k) => localStorage.getItem(nsKey(k)),
+  setItem: (k, v) => localStorage.setItem(nsKey(k), v),
+  removeItem: (k) => localStorage.removeItem(nsKey(k)),
+};
+
 // The baseline "nothing is filtered" state: what resetState() returns to, what updateUrl() omits
 // from the query string, and what decides whether a control tints ember in the header summary.
 const FILTER_DEFAULTS = { project: '__recent__', session: 'active', limit: '20' };
@@ -72,9 +91,7 @@ function getUrlState() {
     project: params.get('project'),
     owner: params.get('owner'),
     search: params.get('search'),
-    messages: params.has('messages')
-      ? params.get('messages') === '1'
-      : localStorage.getItem('message-panel-open') === 'true',
+    messages: params.has('messages') ? params.get('messages') === '1' : store.getItem('message-panel-open') === 'true',
     projectView: params.get('projectView'),
   };
 }
@@ -107,12 +124,12 @@ function persistLastView() {
       // base URL on reload, so the query string alone doesn't survive a hub refresh.
       project: filterProject,
     };
-    localStorage.setItem(LAST_VIEW_KEY, JSON.stringify(data));
+    store.setItem(LAST_VIEW_KEY, JSON.stringify(data));
   } catch (_) {}
 }
 function loadLastView() {
   try {
-    return JSON.parse(localStorage.getItem(LAST_VIEW_KEY)) || null;
+    return JSON.parse(store.getItem(LAST_VIEW_KEY)) || null;
   } catch (_) {
     return null;
   }
@@ -122,7 +139,7 @@ function loadLastView() {
 function resetState() {
   history.replaceState(null, '', window.location.pathname);
   try {
-    localStorage.removeItem(LAST_VIEW_KEY);
+    store.removeItem(LAST_VIEW_KEY);
   } catch (_) {}
   sessionFilter = FILTER_DEFAULTS.session;
   sessionLimit = FILTER_DEFAULTS.limit;
@@ -274,7 +291,7 @@ function toggleSection(containerId, chevronId) {
   const chevron = document.getElementById(chevronId);
   const collapsed = container.classList.toggle('collapsed');
   chevron.classList.toggle('rotated', collapsed);
-  localStorage.setItem(`${containerId}Collapsed`, collapsed);
+  store.setItem(`${containerId}Collapsed`, collapsed);
 }
 
 function isWaitingSession(s) {
@@ -369,7 +386,7 @@ function setActivityFilter(kind) {
   } else {
     toggleActivityKind(kind);
   }
-  localStorage.setItem('activityFilter', JSON.stringify([...activityFilter]));
+  store.setItem('activityFilter', JSON.stringify([...activityFilter]));
   // active/waiting only make sense with the active session filter on
   const targetFilter = activityFilter.size > 0 ? 'active' : sessionFilter;
   if (targetFilter !== sessionFilter) {
@@ -581,7 +598,7 @@ async function refreshProjectAgents() {
 function toggleMessagePanel() {
   const panel = document.getElementById('message-panel');
   messagePanelOpen = !messagePanelOpen;
-  localStorage.setItem('message-panel-open', messagePanelOpen);
+  store.setItem('message-panel-open', messagePanelOpen);
   panel.classList.toggle('visible', messagePanelOpen);
   document.getElementById('message-toggle')?.classList.toggle('active', messagePanelOpen);
   if (messagePanelOpen && currentSessionId) {
@@ -596,7 +613,7 @@ async function openSessionWithBookmarks(sessionId) {
   if (!messagePanelOpen) {
     const panel = document.getElementById('message-panel');
     messagePanelOpen = true;
-    localStorage.setItem('message-panel-open', 'true');
+    store.setItem('message-panel-open', 'true');
     panel.classList.add('visible');
     document.getElementById('message-toggle')?.classList.add('active');
   }
@@ -1479,14 +1496,14 @@ function getPinId(m) {
 
 function loadPins(sessionId) {
   try {
-    return JSON.parse(localStorage.getItem(`pinned-messages-${sessionId}`)) || [];
+    return JSON.parse(store.getItem(`pinned-messages-${sessionId}`)) || [];
   } catch {
     return [];
   }
 }
 
 function savePins(sessionId, pins) {
-  localStorage.setItem(`pinned-messages-${sessionId}`, JSON.stringify(pins));
+  store.setItem(`pinned-messages-${sessionId}`, JSON.stringify(pins));
 }
 
 function isPinned(m) {
@@ -1652,7 +1669,7 @@ const deferredPinPlacement = new Set();
 
 function loadPinnedSessions() {
   try {
-    return new Set(JSON.parse(localStorage.getItem('pinned-sessions')) || []);
+    return new Set(JSON.parse(store.getItem('pinned-sessions')) || []);
   } catch {
     return new Set();
   }
@@ -1660,15 +1677,15 @@ function loadPinnedSessions() {
 
 function loadStickySessions() {
   try {
-    return new Set(JSON.parse(localStorage.getItem('sticky-sessions')) || []);
+    return new Set(JSON.parse(store.getItem('sticky-sessions')) || []);
   } catch {
     return new Set();
   }
 }
 
 function savePinnedSessions() {
-  localStorage.setItem('pinned-sessions', JSON.stringify([...pinnedSessionIds]));
-  localStorage.setItem('sticky-sessions', JSON.stringify([...stickySessionIds]));
+  store.setItem('pinned-sessions', JSON.stringify([...pinnedSessionIds]));
+  store.setItem('sticky-sessions', JSON.stringify([...stickySessionIds]));
 }
 
 // Mirror pin state to server so it can be queried by the CLI. UI remains source of truth for itself.
@@ -2022,12 +2039,12 @@ function _applyModalFullscreen(modalId, on) {
 function toggleModalFullscreen(modalId) {
   const on = !_modalEl(modalId).classList.contains('fullscreen');
   _applyModalFullscreen(modalId, on);
-  localStorage.setItem(`modal-fullscreen-${modalId}`, String(on));
+  store.setItem(`modal-fullscreen-${modalId}`, String(on));
 }
 
 function loadModalFullscreen() {
   _forEachFullscreenModal((modalId) => {
-    if (localStorage.getItem(`modal-fullscreen-${modalId}`) === 'true') _applyModalFullscreen(modalId, true);
+    if (store.getItem(`modal-fullscreen-${modalId}`) === 'true') _applyModalFullscreen(modalId, true);
   });
 }
 
@@ -2064,8 +2081,8 @@ function initModalResize() {
   _forEachFullscreenModal((modalId, modal) => {
     const wKey = `modal-width-${modalId}`;
     const hKey = `modal-height-${modalId}`;
-    const savedW = localStorage.getItem(wKey);
-    const savedH = localStorage.getItem(hKey);
+    const savedW = store.getItem(wKey);
+    const savedH = store.getItem(hKey);
     if (savedW && savedH) {
       _setModalUserSize(modal, savedW, savedH);
       modal.classList.add('user-sized');
@@ -2099,16 +2116,16 @@ function initModalResize() {
       },
       onEnd() {
         if (w && h) {
-          localStorage.setItem(wKey, `${w}px`);
-          localStorage.setItem(hKey, `${h}px`);
+          store.setItem(wKey, `${w}px`);
+          store.setItem(hKey, `${h}px`);
         }
       },
     });
 
     handle.addEventListener('dblclick', () => {
       modal.classList.remove('user-sized');
-      localStorage.removeItem(wKey);
-      localStorage.removeItem(hKey);
+      store.removeItem(wKey);
+      store.removeItem(hKey);
     });
   });
 }
@@ -2116,7 +2133,7 @@ function initModalResize() {
 const MODAL_ZOOM_KEY = 'modal-zoom';
 const MODAL_ZOOM_MIN = 0.7;
 const MODAL_ZOOM_MAX = 2.0;
-let modalZoom = clampModalZoom(Number.parseFloat(localStorage.getItem(MODAL_ZOOM_KEY)) || 1);
+let modalZoom = clampModalZoom(Number.parseFloat(store.getItem(MODAL_ZOOM_KEY)) || 1);
 
 function clampModalZoom(v) {
   return Math.min(MODAL_ZOOM_MAX, Math.max(MODAL_ZOOM_MIN, v));
@@ -2131,7 +2148,7 @@ function adjustModalZoom(delta) {
   const next = delta === 0 ? 1 : clampModalZoom(Math.round((modalZoom + delta) * 10) / 10);
   if (next === modalZoom && delta !== 0) return;
   modalZoom = next;
-  localStorage.setItem(MODAL_ZOOM_KEY, String(modalZoom));
+  store.setItem(MODAL_ZOOM_KEY, String(modalZoom));
   applyModalZoom();
   showToast(`Text ${Math.round(modalZoom * 100)}%`);
 }
@@ -2730,7 +2747,7 @@ function renderAgentFooter() {
   footer.classList.add('visible');
   label.textContent = `Agents Log (${visible.length})`;
 
-  const collapsed = localStorage.getItem('agentFooterCollapsed') === 'true';
+  const collapsed = store.getItem('agentFooterCollapsed') === 'true';
   footer.classList.toggle('collapsed', collapsed);
   document.getElementById('agent-footer-toggle').innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;';
 
@@ -2808,7 +2825,7 @@ function toggleAgentFooter() {
   const footer = document.getElementById('agent-footer');
   const collapsed = !footer.classList.contains('collapsed');
   footer.classList.toggle('collapsed', collapsed);
-  localStorage.setItem('agentFooterCollapsed', collapsed);
+  store.setItem('agentFooterCollapsed', collapsed);
   document.getElementById('agent-footer-toggle').innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;';
 }
 
@@ -3186,7 +3203,7 @@ function renderSessions() {
     const showCtx = !!session.contextStatus;
     const linkedDocsCount = getSessionPreviewPaths(session.id).length;
     const bookmarksCount = loadPins(session.id).length;
-    const hasScratchpad = !!(localStorage.getItem(_sessionScratchpadKey(session.id)) || '').trim();
+    const hasScratchpad = !!(store.getItem(_sessionScratchpadKey(session.id)) || '').trim();
     const tempClass = session.hasRecentLog || session.inProgress || session.hasWaitingForUser ? 'warm' : 'stale';
     const sid = escAttrJs(session.id);
     return `
@@ -3222,7 +3239,7 @@ function renderSessions() {
         `;
   };
 
-  const groupPinned = localStorage.getItem('groupPinnedSessions') !== 'false';
+  const groupPinned = store.getItem('groupPinnedSessions') !== 'false';
   const pinWeight = (s) => (isPlacedSticky(s.id) ? 2 : isPlacedPinned(s.id) && !isSessionActive(s) ? 1 : 0);
   const pinSort = (a, b) => pinWeight(b) - pinWeight(a);
   const countHtml = (arr) => {
@@ -3887,7 +3904,7 @@ function sgKey(id) {
 
 function loadSessionGroups() {
   try {
-    const list = JSON.parse(localStorage.getItem(SESSION_GROUPS_KEY) || 'null')?.groups;
+    const list = JSON.parse(store.getItem(SESSION_GROUPS_KEY) || 'null')?.groups;
     sessionGroups = (Array.isArray(list) ? list : [])
       .filter((g) => g && typeof g.id === 'string')
       .map((g) => ({
@@ -3909,7 +3926,7 @@ function loadSessionGroups() {
 
 function persistSessionGroups() {
   try {
-    localStorage.setItem(SESSION_GROUPS_KEY, JSON.stringify({ version: 1, groups: sessionGroups }));
+    store.setItem(SESSION_GROUPS_KEY, JSON.stringify({ version: 1, groups: sessionGroups }));
   } catch (_) {}
 }
 
@@ -4571,7 +4588,7 @@ function setGroupCollapsed(header, collapsed) {
 
 function persistCollapsedGroups() {
   try {
-    localStorage.setItem('collapsedGroups', JSON.stringify([...collapsedProjectGroups]));
+    store.setItem('collapsedGroups', JSON.stringify([...collapsedProjectGroups]));
   } catch (_) {}
 }
 
@@ -4675,7 +4692,7 @@ function setFocusZone(zone) {
   if (zone === 'sidebar') {
     if (sidebar.classList.contains('collapsed')) {
       sidebar.classList.remove('collapsed');
-      localStorage.setItem('sidebar-collapsed', false);
+      store.setItem('sidebar-collapsed', false);
     }
     const items = getNavigableItems();
     if (items.length > 0) {
@@ -5260,7 +5277,7 @@ function showScratchpad(keyOverride) {
   _scratchpadKeyOverride = keyOverride || null;
   const key = _scratchpadKey();
   if (!key) return;
-  _scratchpadTextarea.value = localStorage.getItem(key) || '';
+  _scratchpadTextarea.value = store.getItem(key) || '';
   _scratchpadCharcount.textContent = `${_scratchpadTextarea.value.length} chars`;
   _scratchpadModal.classList.add('visible');
   _scratchpadTextarea.focus();
@@ -5280,12 +5297,12 @@ function saveScratchpad() {
   const key = _scratchpadKey();
   if (!key) return;
   const val = _scratchpadTextarea.value;
-  const had = !!(localStorage.getItem(key) || '').trim();
+  const had = !!(store.getItem(key) || '').trim();
   const has = !!val.trim();
   if (has) {
-    localStorage.setItem(key, val);
+    store.setItem(key, val);
   } else {
-    localStorage.removeItem(key);
+    store.removeItem(key);
   }
   if (had !== has && _isSessionScratchpadKey(key)) {
     renderSessions();
@@ -5307,9 +5324,8 @@ _scratchpadTextarea.addEventListener('input', () => {
 
 function _getStorageTotalSize() {
   let bytes = 0;
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    bytes += k.length + localStorage.getItem(k).length;
+  for (const k of store.keys()) {
+    bytes += k.length + store.getItem(k).length;
   }
   return bytes * 2; // UTF-16
 }
@@ -5399,12 +5415,11 @@ function _renderStorageSessions() {
   const pinnedIds = [...new Set([...pinnedSessionIds, ...stickySessionIds])];
 
   const msgMap = new Map();
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
+  for (const key of store.keys()) {
     if (!key.startsWith('pinned-messages-')) continue;
     const sid = key.slice('pinned-messages-'.length);
     try {
-      const pins = JSON.parse(localStorage.getItem(key)) || [];
+      const pins = JSON.parse(store.getItem(key)) || [];
       if (pins.length) msgMap.set(sid, { pins, key });
     } catch {}
   }
@@ -5487,7 +5502,7 @@ function _storageUnpinSession(id) {
 }
 
 function _storageClearSessionPins(sessionId) {
-  localStorage.removeItem(`pinned-messages-${sessionId}`);
+  store.removeItem(`pinned-messages-${sessionId}`);
   if (currentSessionId === sessionId) {
     currentPins = [];
     const el = document.getElementById('message-panel-pinned');
@@ -5500,12 +5515,12 @@ function _storageClearSessionPins(sessionId) {
 function _storageUnpinMessage(sessionId, pinId) {
   const key = `pinned-messages-${sessionId}`;
   try {
-    const pins = JSON.parse(localStorage.getItem(key)) || [];
+    const pins = JSON.parse(store.getItem(key)) || [];
     const idx = pins.findIndex((p) => p.id === pinId);
     if (idx < 0) return;
     pins.splice(idx, 1);
-    if (pins.length) localStorage.setItem(key, JSON.stringify(pins));
-    else localStorage.removeItem(key);
+    if (pins.length) store.setItem(key, JSON.stringify(pins));
+    else store.removeItem(key);
     if (currentSessionId === sessionId) {
       currentPins = pins;
       const el = document.getElementById('message-panel-pinned');
@@ -5518,10 +5533,9 @@ function _storageUnpinMessage(sessionId, pinId) {
 
 function _renderStorageScratchpads() {
   const allItems = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
+  for (const key of store.keys()) {
     if (!key.startsWith('scratchpad-')) continue;
-    const val = localStorage.getItem(key) || '';
+    const val = store.getItem(key) || '';
     const isProject = key.startsWith('scratchpad-project:');
     const id = isProject ? key.slice('scratchpad-project:'.length) : key.slice('scratchpad-'.length);
     allItems.push({ key, id, isProject, chars: val.length });
@@ -5590,7 +5604,7 @@ function _storagePreviewPin(sessionId, pinId) {
   closeStorageManager();
   const key = `pinned-messages-${sessionId}`;
   try {
-    const pins = JSON.parse(localStorage.getItem(key)) || [];
+    const pins = JSON.parse(store.getItem(key)) || [];
     const pin = pins.find((p) => p.id === pinId);
     if (!pin) return;
     document.getElementById('msg-detail-pin-btn').style.display = 'none';
@@ -5604,18 +5618,17 @@ function _storagePreviewPin(sessionId, pinId) {
 }
 
 function _storageDeleteScratchpad(key) {
-  localStorage.removeItem(key);
+  store.removeItem(key);
   _renderStorageTab();
   _updateStorageTotal();
 }
 
 function _renderStorageLinkedDocs() {
   const entries = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
+  for (const key of store.keys()) {
     if (!key.startsWith(PREVIEW_STORAGE_PREFIX)) continue;
     try {
-      const arr = JSON.parse(localStorage.getItem(key)) || [];
+      const arr = JSON.parse(store.getItem(key)) || [];
       if (Array.isArray(arr) && arr.length) {
         entries.push({ sessionId: key.slice(PREVIEW_STORAGE_PREFIX.length), paths: arr });
       }
@@ -5679,7 +5692,7 @@ function _storageUnlinkDoc(sessionId, path) {
 }
 
 function _storageClearLinkedDocs(sessionId) {
-  localStorage.removeItem(PREVIEW_STORAGE_PREFIX + sessionId);
+  store.removeItem(PREVIEW_STORAGE_PREFIX + sessionId);
   afterLinkedDocsChanged(sessionId);
 }
 
@@ -5689,8 +5702,7 @@ function _findOrphanedKeys() {
   const orphaned = [];
   for (const id of pinnedSessionIds) if (!known.has(id)) orphaned.push(`__pinned__${id}`);
   for (const id of stickySessionIds) if (!known.has(id)) orphaned.push(`__sticky__${id}`);
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
+  for (const key of store.keys()) {
     if (key.startsWith('pinned-messages-')) {
       if (!known.has(key.slice('pinned-messages-'.length))) orphaned.push(key);
     } else if (_isSessionScratchpadKey(key)) {
@@ -5725,7 +5737,7 @@ function cleanupOrphanedStorage() {
       stickySessionIds.delete(key.slice('__sticky__'.length));
       pinsChanged = true;
     } else {
-      localStorage.removeItem(key);
+      store.removeItem(key);
     }
   }
   if (pinsChanged) savePinnedSessions();
@@ -6102,7 +6114,7 @@ let currentPreviewPath = null;
 function getSessionPreviewPaths(sessionId) {
   if (!sessionId) return [];
   try {
-    const raw = localStorage.getItem(PREVIEW_STORAGE_PREFIX + sessionId);
+    const raw = store.getItem(PREVIEW_STORAGE_PREFIX + sessionId);
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) ? arr : [];
   } catch {
@@ -6114,14 +6126,14 @@ function addSessionPreviewPath(sessionId, filePath) {
   if (!sessionId || !filePath) return;
   const paths = getSessionPreviewPaths(sessionId).filter((p) => p !== filePath);
   paths.unshift(filePath);
-  localStorage.setItem(PREVIEW_STORAGE_PREFIX + sessionId, JSON.stringify(paths.slice(0, 20)));
+  store.setItem(PREVIEW_STORAGE_PREFIX + sessionId, JSON.stringify(paths.slice(0, 20)));
 }
 
 function removeSessionPreviewPath(sessionId, filePath) {
   if (!sessionId) return;
   const paths = getSessionPreviewPaths(sessionId).filter((p) => p !== filePath);
-  if (paths.length) localStorage.setItem(PREVIEW_STORAGE_PREFIX + sessionId, JSON.stringify(paths));
-  else localStorage.removeItem(PREVIEW_STORAGE_PREFIX + sessionId);
+  if (paths.length) store.setItem(PREVIEW_STORAGE_PREFIX + sessionId, JSON.stringify(paths));
+  else store.removeItem(PREVIEW_STORAGE_PREFIX + sessionId);
 }
 
 // Every surface that shows linked docs — info modal, session card badge, preview
@@ -7246,7 +7258,7 @@ function renderMarkdown(text) {
 }
 
 function isLightTheme() {
-  const saved = localStorage.getItem('theme');
+  const saved = store.getItem('theme');
   return (
     document.body.classList.contains('light') || (!saved && window.matchMedia('(prefers-color-scheme: light)').matches)
   );
@@ -7552,13 +7564,13 @@ document.addEventListener('click', (e) => {
 
   if (e.target.closest('.pinned-ungroup-btn')) {
     e.stopPropagation();
-    localStorage.setItem('groupPinnedSessions', 'false');
+    store.setItem('groupPinnedSessions', 'false');
     renderSessions();
     return;
   }
 
   if (e.target.closest('.pinned-regroup-banner')) {
-    localStorage.setItem('groupPinnedSessions', 'true');
+    store.setItem('groupPinnedSessions', 'true');
     renderSessions();
     return;
   }
@@ -7672,11 +7684,11 @@ function toggleTheme() {
   if (isCurrentlyLight) {
     document.body.classList.remove('light');
     document.body.classList.add('dark-forced');
-    localStorage.setItem('theme', 'dark');
+    store.setItem('theme', 'dark');
   } else {
     document.body.classList.add('light');
     document.body.classList.remove('dark-forced');
-    localStorage.setItem('theme', 'light');
+    store.setItem('theme', 'light');
   }
   updateThemeIcon();
   updateThemeColor(!isCurrentlyLight);
@@ -7699,7 +7711,7 @@ function updateThemeIcon() {
 }
 
 function loadTheme() {
-  const saved = localStorage.getItem('theme');
+  const saved = store.getItem('theme');
   if (saved === 'light') {
     document.body.classList.add('light');
     document.body.classList.remove('dark-forced');
@@ -7712,7 +7724,7 @@ function loadTheme() {
   updateThemeColor(document.body.classList.contains('light'));
   syncHljsTheme();
   buildThemeMenu();
-  const colorTheme = localStorage.getItem('color-theme');
+  const colorTheme = store.getItem('color-theme');
   if (colorTheme) document.body.dataset.colorTheme = colorTheme;
   syncColorThemeSelect(colorTheme || 'ember');
 }
@@ -7768,10 +7780,10 @@ function syncColorThemeSelect(id) {
 function setColorTheme(id) {
   if (!id || id === 'ember') {
     delete document.body.dataset.colorTheme;
-    localStorage.removeItem('color-theme');
+    store.removeItem('color-theme');
   } else {
     document.body.dataset.colorTheme = id;
-    localStorage.setItem('color-theme', id);
+    store.setItem('color-theme', id);
   }
   syncColorThemeSelect(id);
 }
@@ -7782,7 +7794,7 @@ function setColorTheme(id) {
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
   const collapsed = sidebar.classList.toggle('collapsed');
-  localStorage.setItem('sidebar-collapsed', collapsed);
+  store.setItem('sidebar-collapsed', collapsed);
   if (collapsed) {
     sidebar.style.width = '';
     if (focusZone === 'sidebar') setFocusZone('board');
@@ -7794,10 +7806,10 @@ function toggleSidebar() {
 
 function loadSidebarState() {
   const sidebar = document.querySelector('.sidebar');
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+  if (store.getItem('sidebar-collapsed') === 'true') {
     sidebar.classList.add('collapsed');
   }
-  const w = localStorage.getItem('sidebar-width');
+  const w = store.getItem('sidebar-width');
   if (w) {
     sidebar.style.setProperty('--sidebar-width', w);
   }
@@ -7852,7 +7864,7 @@ function initSidebarResize() {
     },
     onEnd() {
       sidebar.classList.remove('resizing');
-      localStorage.setItem('sidebar-width', sidebar.style.getPropertyValue('--sidebar-width'));
+      store.setItem('sidebar-width', sidebar.style.getPropertyValue('--sidebar-width'));
     },
   });
 }
@@ -7873,7 +7885,7 @@ function initPanelResize(panelId, handleId, cssVar, storageKey) {
     },
     onEnd() {
       panel.classList.remove('resizing');
-      localStorage.setItem(storageKey, panel.style.getPropertyValue(cssVar));
+      store.setItem(storageKey, panel.style.getPropertyValue(cssVar));
     },
   });
 }
@@ -7883,7 +7895,7 @@ function loadPanelWidths() {
     ['detail-panel', '--detail-panel-width'],
     ['message-panel', '--message-panel-width'],
   ].forEach(([id, cssVar]) => {
-    const w = localStorage.getItem(`${id}-width`);
+    const w = store.getItem(`${id}-width`);
     if (w) document.getElementById(id).style.setProperty(cssVar, w);
   });
 }
@@ -8892,7 +8904,7 @@ if ('serviceWorker' in navigator) {
 
 //#region INIT
 loadTheme();
-if (localStorage.getItem('sessions-filtersCollapsed') === 'true') {
+if (store.getItem('sessions-filtersCollapsed') === 'true') {
   document.getElementById('sessions-filters').classList.add('collapsed');
   document.getElementById('sessions-chevron').classList.add('rotated');
 }
@@ -8932,7 +8944,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 loadSidebarState();
 try {
-  const cg = JSON.parse(localStorage.getItem('collapsedGroups') || '[]');
+  const cg = JSON.parse(store.getItem('collapsedGroups') || '[]');
   // biome-ignore lint/suspicious/useIterableCallbackReturn: forEach side-effect
   cg.forEach((p) => collapsedProjectGroups.add(p));
 } catch (_) {}
@@ -8940,7 +8952,7 @@ loadSessionGroups();
 initSessionGroupsDnd();
 initSessionPicker();
 try {
-  const af = JSON.parse(localStorage.getItem('activityFilter') || '[]');
+  const af = JSON.parse(store.getItem('activityFilter') || '[]');
   // biome-ignore lint/suspicious/useIterableCallbackReturn: forEach side-effect
   af.forEach((k) => activityFilter.add(k));
 } catch (_) {}
